@@ -83,4 +83,3 @@ This repository contains the software components for a Thermal-Based Search-and-
 - Machine learning for thermal object detection
 - Automated alert systems
 - Data logging and analysis tools
-
