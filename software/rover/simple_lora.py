@@ -3,13 +3,14 @@
 ###############################################################
 # Lora appears to RPi as a serial port
 # Lora Specifications
-# Communication Protocol: UART
-# Baud Rate: 1200 - 115200 bps
-# 
+## Communication Protocol: UART
+## Baud Rate: 1200 - 115200 bps
 ###############################################################
 
 import serial
 import time
+
+from simple_motor import SimpleMotor
 
 # Open LoRa serial port for receiving motor commands
 lora = serial.Serial(
@@ -18,28 +19,51 @@ lora = serial.Serial(
     timeout=10            # long timeout period (seconds)
 )
 
+# replace with actual RPi GPIO pins
+leftMotorPin1 = 1
+leftMotorPin2 = 2
+rightMotorPin1 = 3
+rightMotorPin2 = 4
+
+motors = SimpleMotor(4, [leftMotorPin1, leftMotorPin2, rightMotorPin1, rightMotorPin2])
+
+print("Configured motor pins")
 print("Listening for LoRa messages...")
 
 try:
     while True:
 
         if lora.in_waiting > 0:             # if bytes available in buffer
-            motor_dir = lora.read(lora.in_waiting)      # read all available bytes
-            print("Received (raw bytes):", data)
+            packets = lora.read(lora.in_waiting)      # read all available bytes
+            print("Received (raw bytes):", packets)
 
             try:
-                print("As string:", motor_dir.decode("utf-8").strip())
+                print("As string:", packets.decode("utf-8").strip())
 
-                if motor_dir[0].decode("utf-8") == "W"
+                if packets[0].decode("utf-8") == "W":
+                    # drive forward
+                    motors.forward()
 
-                    
-                else if motor_dir[0].decode("utf-8") == "A"
-                else if motor_dir[0].decode("utf-8") == "S"
-                else if motor_dir[0].deocde("utf-8") == "D"
+                elif packets[0].decode("utf-8") == "A":
+                    # drive left
+                    motors.left()
+
+                elif packets[0].decode("utf-8") == "S":
+                    # drive backwards
+                    motors.backward()
+
+                elif packets[0].decode("utf-8") == "D":
+                    # drive right
+                    motors.right()
+
+                elif packets[0].decode("utf-8") == "T":
+                    # stop motors
+                    motors.stop()
 
                 
             except UnicodeDecodeError:
                 print("Non-text bytes received")
+
         time.sleep(0.1)
 
 except KeyboardInterrupt:
