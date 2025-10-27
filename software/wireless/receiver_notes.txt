@@ -7,3 +7,4 @@ On Windows, to specifically use the adapter and not the internal WiFi
     2. Disable WiFi
     3. Enable WiFi 2
     4. Connect to VideoStreamPi
+    5. Run receiver.py or go to http://192.168.4.1:5000/video to verify functionality
