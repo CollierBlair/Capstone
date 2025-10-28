@@ -17,7 +17,7 @@ while True:
     a = bytes_data.find(b'\xff\xd8')
     b = bytes_data.find(b'\xff\xd9')
     
-    if a != -1 and b != -1:
+    if a != -1 and b != -1 and b > a:
         jpg = bytes_data[a:b+2]
         bytes_data = bytes_data[b+2:]
         frame = cv2.imdecode(np.frombuffer(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)

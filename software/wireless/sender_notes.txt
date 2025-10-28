@@ -17,6 +17,7 @@ Edit /etc/hostapd/hostapd.conf
     channel=6
     wmm_enabled=0
     auth_algs=1
+    ignore_broadcast_ssid=0
     wpa=2
     wpa_passphrase=12345678
     wpa_key_mgmt=WPA-PSK
@@ -35,11 +36,31 @@ Edit /etc/dnsmasq.conf
     interface=wlan1
     dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
 
+sudo nano /etc/udev/rules.d/70-persistent-net.rules
+    SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="<HOME_MAC>", NAME="wlan0"
+    SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="<ADAPTER_MAC>", NAME="wlan1"
+
+sudo nano /etc/systemd/network/20-wlan1.network
+    [Match]
+    Name=wlan1
+
+    [Network]
+    Address=192.168.4.1/24
+    IPForward=yes
+
+*** May need to do the same for wlan0, but it works for now ***
+
 
 git clone https://github.com/morrownr/8821cu-20210916.git
 cd 8821cu-20210916
 sudo ./install-driver.sh
 sudo reboot
+
+sudo systemctl restart systemd-networkd
+sudo systemctl status hostapd dnsmasq
+
+iw dev (or ip addr show)
+    ensure wlan0 and wlan1 are connected to home network and are streaming
 
 Wait a couple minutes
 
