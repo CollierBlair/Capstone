@@ -115,13 +115,10 @@ int main(void)
   {
 	 // receive 1 byte from serial buffer for motor control
 //	HAL_UART_Receive(&huart2, &ser_buff, 1, 1000);
-	  ser_buff = 'a';
+	ser_buff = 'a';
 
 	// send data byte over radio to receiver
-	rfm69_enable();
-	HAL_SPI_Transmit(&hspi1, &ser_buff, 1, 1000);
-	rfm69_disable();
-
+	rfm69_write_byte(0x00, ser_buff);
 	HAL_Delay(500);
 
     /* USER CODE END WHILE */
@@ -181,6 +178,7 @@ void rfm69_config()
 	// Mode in RegOpMode = 011
 	// ListenOn in RegOpMode = 0
 	rfm69_write_byte(0x01, 0b00001100);
+	while (rfm69_read_byte(0x01) != 0b00001100);
 
 	// Packet Mode, uC does not directly control modulation
 	// FSK Modulation, no modulation shaping
@@ -202,10 +200,11 @@ void rfm69_disable()
 
 void rfm69_write_byte(uint8_t addr, uint8_t byte)
 {
-	uint8_t buff[2] = {addr, byte};
+	// MSB of addr must be 1 on write
+	uint8_t buff[2] = {addr | 0b10000000, byte};
 
 	rfm69_enable();
-	HAL_SPI_Transmit(&hspi1, &buff, 2, 1000);
+	HAL_SPI_Transmit(&hspi1, buff, 2, 1000);
 	rfm69_disable();
 }
 
@@ -213,6 +212,9 @@ uint8_t rfm69_read_byte(uint8_t addr)
 {
 
 	uint8_t byte;
+
+	// MSB must be 0 for read
+	addr &= ~0b10000000;
 
 	rfm69_enable();
 	HAL_SPI_Transmit(&hspi1, &addr, 1, 1000);
