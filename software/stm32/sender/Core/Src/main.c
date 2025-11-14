@@ -51,7 +51,12 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
+void rfm69_config();
+void rfm69_enable();
+void rfm69_disable();
 
+void rfm69_write_byte(uint8_t addr, uint8_t byte);
+uint8_t rfm69_read_byte(uint8_t addr);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -77,6 +82,11 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
+  // PC4 (A3) --> SS
+  // PA5 (A4) --> SCK
+  // PA6 (A5) --> MISO
+  // PA7 (A6) --> MOSI
+
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -91,7 +101,11 @@ int main(void)
   MX_SPI1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  uint8_t data = 'a';
+
+  rfm69_disable();
+  rfm69_config();
+
+  uint8_t ser_buff;
 
   /* USER CODE END 2 */
 
@@ -99,9 +113,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    /* USER CODE END WHILE */
-	HAL_UART_Transmit(&huart2, &data, 1, 1000);
+	 // receive 1 byte from serial buffer for motor control
+//	HAL_UART_Receive(&huart2, &ser_buff, 1, 1000);
+	  ser_buff = 'a';
+
+	// send data byte over radio to receiver
+	rfm69_enable();
+	HAL_SPI_Transmit(&hspi1, &ser_buff, 1, 1000);
+	rfm69_disable();
+
 	HAL_Delay(500);
+
+    /* USER CODE END WHILE */
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -126,10 +150,9 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_MSI;
-  RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-  RCC_OscInitStruct.MSICalibrationValue = 0;
-  RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
@@ -140,7 +163,7 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
@@ -152,7 +175,52 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
+void rfm69_config()
+{
+	// Transmit Mode
+	// Mode in RegOpMode = 011
+	// ListenOn in RegOpMode = 0
+	rfm69_write_byte(0x01, 0b00001100);
 
+	// Packet Mode, uC does not directly control modulation
+	// FSK Modulation, no modulation shaping
+	rfm69_write_byte(0x02, 0b00000000);
+
+	// wait until PA ramps up and radio is ready
+	while (!(rfm69_read_byte(0x27) & (1 << 5)));
+}
+
+void rfm69_enable()
+{
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+}
+
+void rfm69_disable()
+{
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+}
+
+void rfm69_write_byte(uint8_t addr, uint8_t byte)
+{
+	uint8_t buff[2] = {addr, byte};
+
+	rfm69_enable();
+	HAL_SPI_Transmit(&hspi1, &buff, 2, 1000);
+	rfm69_disable();
+}
+
+uint8_t rfm69_read_byte(uint8_t addr)
+{
+
+	uint8_t byte;
+
+	rfm69_enable();
+	HAL_SPI_Transmit(&hspi1, &addr, 1, 1000);
+	HAL_SPI_Receive(&hspi1, &byte, 1, 1000);
+	rfm69_disable();
+
+	return byte;
+}
 /* USER CODE END 4 */
 
 /**
