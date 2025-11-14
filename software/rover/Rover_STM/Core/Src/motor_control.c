@@ -1,4 +1,5 @@
 /*
+<<<<<<< HEAD
  * 4-Motor Rover Control with Input Handling and Speed Ramping
  * STM32L4 - HAL Library Implementation
  *
@@ -42,12 +43,39 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+=======
+ * 2-Track Rover Motor Control with Input Handling and Speed Ramping
+ * STM32L4 - Direct register access only
+ *
+ * Features:
+ * - Button inputs for Forward, Backward, Left, Right
+ * - Smooth speed ramping up when button held
+ * - Smooth speed ramping down when button released
+ * - Configurable ramp rates
+ *
+ * Hardware connections:
+ * - Left motor PWM: PA0 (TIM2_CH1)
+ * - Left motor DIR: PA4
+ * - Right motor PWM: PA1 (TIM2_CH2)
+ * - Right motor DIR: PA5
+ *
+ * - Forward button: PB0 (active low with pull-up)
+ * - Backward button: PB1 (active low with pull-up)
+ * - Left button: PB2 (active low with pull-up)
+ * - Right button: PB3 (active low with pull-up)
+ * - Stop button: PB4 (active low with pull-up)
+ */
+
+#include "stm32l4xx.h"
+#include <stdbool.h>
+>>>>>>> working-branch
 
 // Motor parameters
 #define MAX_SPEED 100
 #define MIN_SPEED 0
 #define PWM_PERIOD 999
 
+<<<<<<< HEAD
 // Test mode - set to 1 for hardwired PWM testing, 0 for normal button control
 #define TEST_MODE 1
 #define TEST_PWM_DUTY 50      // Test PWM duty cycle (0-100%)
@@ -58,6 +86,14 @@
 #define RAMP_UPDATE_MS 200     // Time between ramp updates (milliseconds)
 
 // Target speeds for each tread
+=======
+// Ramping parameters
+#define RAMP_UP_STEP 2        // Speed increment per update (faster = more aggressive)
+#define RAMP_DOWN_STEP 5      // Speed decrement per update (faster braking)
+#define RAMP_UPDATE_MS 20     // Time between ramp updates (milliseconds)
+
+// Target speeds for each motor
+>>>>>>> working-branch
 static int8_t left_target_speed = 0;
 static int8_t right_target_speed = 0;
 
@@ -65,6 +101,7 @@ static int8_t right_target_speed = 0;
 static int8_t left_current_speed = 0;
 static int8_t right_current_speed = 0;
 
+<<<<<<< HEAD
 // Timer counter for timing
 static volatile uint32_t timer_counter = 0;
 
@@ -73,6 +110,8 @@ TIM_HandleTypeDef htim1;   // PWM timer for most motors
 TIM_HandleTypeDef htim16;  // PWM timer for one motor
 TIM_HandleTypeDef htim6;   // Timing timer
 
+=======
+>>>>>>> working-branch
 // Button state structure
 typedef struct {
     bool forward;
@@ -83,16 +122,23 @@ typedef struct {
 } ButtonState;
 
 // Function prototypes
+<<<<<<< HEAD
 void SystemClock_Config(void);
 void motor_init(void);
 void button_init(void);
 void timer6_init(void);
 void Error_Handler(void);
+=======
+void motor_init(void);
+void button_init(void);
+void systick_init(void);
+>>>>>>> working-branch
 ButtonState read_buttons(void);
 void process_inputs(ButtonState buttons);
 void update_motor_speeds(void);
 void set_motor_pwm(int8_t left_speed, int8_t right_speed);
 void motor_stop(void);
+<<<<<<< HEAD
 
 /*
  * System Clock Configuration
@@ -280,12 +326,64 @@ void motor_init(void) {
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2); // Left Front (CH2N)
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3); // Left Rear (CH3N)
     HAL_TIMEx_PWMN_Start(&htim16, TIM_CHANNEL_1);// Right Rear (CH1N)
+=======
+void delay_ms(uint32_t ms);
+
+// SysTick counter for timing
+static volatile uint32_t systick_counter = 0;
+
+/*
+ * Initialize GPIO and Timer for motor control
+ */
+void motor_init(void) {
+    // Enable clocks for GPIOA and TIM2
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOAEN;
+    RCC->APB1ENR1 |= RCC_APB1ENR1_TIM2EN;
+
+    // Configure PA0 and PA1 as alternate function (TIM2_CH1 and TIM2_CH2)
+    GPIOA->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1);
+    GPIOA->MODER |= GPIO_MODER_MODE0_1 | GPIO_MODER_MODE1_1;  // Alternate function
+
+    GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL0 | GPIO_AFRL_AFSEL1);
+    GPIOA->AFR[0] |= (1 << GPIO_AFRL_AFSEL0_Pos) | (1 << GPIO_AFRL_AFSEL1_Pos);  // AF1
+
+    GPIOA->OSPEEDR |= GPIO_OSPEEDR_OSPEED0 | GPIO_OSPEEDR_OSPEED1;  // High speed
+
+    // Configure PA4 and PA5 as GPIO output (direction pins)
+    GPIOA->MODER &= ~(GPIO_MODER_MODE4 | GPIO_MODER_MODE5);
+    GPIOA->MODER |= GPIO_MODER_MODE4_0 | GPIO_MODER_MODE5_0;  // Output mode
+    GPIOA->OSPEEDR |= GPIO_OSPEEDR_OSPEED4 | GPIO_OSPEEDR_OSPEED5;
+
+    // Configure TIM2 for PWM
+    TIM2->PSC = 79;  // 80MHz / 80 = 1MHz timer clock
+    TIM2->ARR = PWM_PERIOD;
+
+    // PWM mode 1 for channels 1 and 2
+    TIM2->CCMR1 &= ~(TIM_CCMR1_OC1M | TIM_CCMR1_OC2M);
+    TIM2->CCMR1 |= (TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_2);  // CH1
+    TIM2->CCMR1 |= (TIM_CCMR1_OC2M_1 | TIM_CCMR1_OC2M_2);  // CH2
+
+    // Enable preload
+    TIM2->CCMR1 |= TIM_CCMR1_OC1PE | TIM_CCMR1_OC2PE;
+    TIM2->CR1 |= TIM_CR1_ARPE;
+
+    // Enable channel outputs
+    TIM2->CCER |= TIM_CCER_CC1E | TIM_CCER_CC2E;
+
+    // Initialize to stopped
+    TIM2->CCR1 = 0;
+    TIM2->CCR2 = 0;
+
+    // Start timer
+    TIM2->CR1 |= TIM_CR1_CEN;
+>>>>>>> working-branch
 }
 
 /*
  * Initialize button input pins
  */
 void button_init(void) {
+<<<<<<< HEAD
     GPIO_InitTypeDef GPIO_InitStruct = {0};
 
     // Enable GPIO clocks (already enabled in motor_init)
@@ -349,12 +447,46 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM6) {
         timer_counter++;
     }
+=======
+    // Enable GPIOB clock
+    RCC->AHB2ENR |= RCC_AHB2ENR_GPIOBEN;
+
+    // Configure PB0-PB4 as inputs
+    GPIOB->MODER &= ~(GPIO_MODER_MODE0 | GPIO_MODER_MODE1 |
+                      GPIO_MODER_MODE2 | GPIO_MODER_MODE3 | GPIO_MODER_MODE4);
+
+    // Enable pull-up resistors (buttons are active low)
+    GPIOB->PUPDR &= ~(GPIO_PUPDR_PUPD0 | GPIO_PUPDR_PUPD1 |
+                      GPIO_PUPDR_PUPD2 | GPIO_PUPDR_PUPD3 | GPIO_PUPDR_PUPD4);
+    GPIOB->PUPDR |= (GPIO_PUPDR_PUPD0_0 | GPIO_PUPDR_PUPD1_0 |
+                     GPIO_PUPDR_PUPD2_0 | GPIO_PUPDR_PUPD3_0 | GPIO_PUPDR_PUPD4_0);
+}
+
+/*
+ * Initialize SysTick for timing (1ms tick)
+ */
+void systick_init(void) {
+    // Configure SysTick for 1ms interrupts (assuming 80MHz clock)
+    SysTick->LOAD = 80000 - 1;  // 80MHz / 80000 = 1kHz (1ms)
+    SysTick->VAL = 0;
+    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk |
+                    SysTick_CTRL_TICKINT_Msk |
+                    SysTick_CTRL_ENABLE_Msk;
+}
+
+/*
+ * SysTick interrupt handler
+ */
+void SysTick_Handler(void) {
+    systick_counter++;
+>>>>>>> working-branch
 }
 
 /*
  * Get current time in milliseconds
  */
 uint32_t millis(void) {
+<<<<<<< HEAD
     return timer_counter;
 }
 
@@ -363,6 +495,17 @@ uint32_t millis(void) {
  */
 void delay_ms(uint32_t ms) {
     HAL_Delay(ms);
+=======
+    return systick_counter;
+}
+
+/*
+ * Delay function using SysTick
+ */
+void delay_ms(uint32_t ms) {
+    uint32_t start = millis();
+    while ((millis() - start) < ms);
+>>>>>>> working-branch
 }
 
 /*
@@ -371,6 +514,7 @@ void delay_ms(uint32_t ms) {
  */
 ButtonState read_buttons(void) {
     ButtonState buttons;
+<<<<<<< HEAD
 
     // Buttons are active low
     buttons.forward = (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_4) == GPIO_PIN_RESET);
@@ -378,6 +522,16 @@ ButtonState read_buttons(void) {
     buttons.left = (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_4) == GPIO_PIN_RESET);
     buttons.right = (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_5) == GPIO_PIN_RESET);
     buttons.stop = (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_6) == GPIO_PIN_RESET);
+=======
+    uint32_t idr = GPIOB->IDR;
+
+    // Buttons are active low
+    buttons.forward = !(idr & GPIO_IDR_ID0);
+    buttons.backward = !(idr & GPIO_IDR_ID1);
+    buttons.left = !(idr & GPIO_IDR_ID2);
+    buttons.right = !(idr & GPIO_IDR_ID3);
+    buttons.stop = !(idr & GPIO_IDR_ID4);
+>>>>>>> working-branch
 
     return buttons;
 }
@@ -437,10 +591,17 @@ void process_inputs(ButtonState buttons) {
 
 /*
  * Update motor speeds with ramping
+<<<<<<< HEAD
  * Call this periodically (e.g., every 200ms)
  */
 void update_motor_speeds(void) {
     // Ramp left tread
+=======
+ * Call this periodically (e.g., every 20ms)
+ */
+void update_motor_speeds(void) {
+    // Ramp left motor
+>>>>>>> working-branch
     if (left_current_speed < left_target_speed) {
         left_current_speed += RAMP_UP_STEP;
         if (left_current_speed > left_target_speed) {
@@ -453,7 +614,11 @@ void update_motor_speeds(void) {
         }
     }
 
+<<<<<<< HEAD
     // Ramp right tread
+=======
+    // Ramp right motor
+>>>>>>> working-branch
     if (right_current_speed < right_target_speed) {
         right_current_speed += RAMP_UP_STEP;
         if (right_current_speed > right_target_speed) {
@@ -483,6 +648,7 @@ void motor_stop(void) {
 }
 
 /*
+<<<<<<< HEAD
  * Set motor PWM and direction for all 4 motors
  * Both motors on each tread receive the same speed/direction
  */
@@ -540,6 +706,30 @@ void Error_Handler(void) {
     while (1) {
         // You could add LED blinking here to indicate error
     }
+=======
+ * Set motor PWM and direction
+ */
+void set_motor_pwm(int8_t left_speed, int8_t right_speed) {
+    // Left motor direction
+    if (left_speed >= 0) {
+        GPIOA->BSRR = GPIO_BSRR_BS4;  // Forward
+    } else {
+        GPIOA->BSRR = GPIO_BSRR_BR4;  // Backward
+        left_speed = -left_speed;
+    }
+
+    // Right motor direction
+    if (right_speed >= 0) {
+        GPIOA->BSRR = GPIO_BSRR_BS5;  // Forward
+    } else {
+        GPIOA->BSRR = GPIO_BSRR_BR5;  // Backward
+        right_speed = -right_speed;
+    }
+
+    // Set PWM duty cycles
+    TIM2->CCR1 = (PWM_PERIOD * left_speed) / 100;
+    TIM2->CCR2 = (PWM_PERIOD * right_speed) / 100;
+>>>>>>> working-branch
 }
 
 /*
@@ -548,6 +738,7 @@ void Error_Handler(void) {
 int main(void) {
     uint32_t last_update = 0;
 
+<<<<<<< HEAD
     // Initialize HAL
     HAL_Init();
 
@@ -571,6 +762,11 @@ int main(void) {
     }
 #else
     // NORMAL MODE: Button control with ramping
+=======
+    // Initialize peripherals
+    systick_init();
+    motor_init();
+>>>>>>> working-branch
     button_init();
 
     while (1) {
@@ -587,9 +783,14 @@ int main(void) {
         }
 
         // Optional: Add small delay to reduce CPU usage
+<<<<<<< HEAD
         // HAL_Delay(1);
     }
 #endif
+=======
+        // The main work is done in timed intervals anyway
+    }
+>>>>>>> working-branch
 
     return 0;
 }

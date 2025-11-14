@@ -1,6 +1,9 @@
 # PyQt5 GUI Framework
 PyQt5>=5.15.0
 
+# Serial communication for LoRa module
+pyserial>=3.5
+
 # For future video processing (when you add thermal camera)
 # opencv-python>=4.8.0
 # numpy>=1.24.0
