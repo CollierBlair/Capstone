@@ -1,0 +1,67 @@
+Runs on rover side, sends video stream.
+
+This module handles sending data from the rover to the operator interface, as of right now, only the video stream
+This script assumes the AC600 has been set up as a WiFi access point
+On a WiFi access point, the Pi itself acts as a mini router, so by plugging in the AC600 adapter to your laptop and connecting 
+to the Pi's network, you can use it to stream video
+
+sudo apt install hostapd dnsmasq
+sudo systemctl stop hostapd
+sudo systemctl stop dnsmasq
+
+Edit /etc/hostapd/hostapd.conf
+    interface=wlan1
+    driver=nl80211
+    ssid=VideoStreamPi
+    hw_mode=g
+    channel=6
+    wmm_enabled=0
+    auth_algs=1
+    ignore_broadcast_ssid=0
+    wpa=2
+    wpa_passphrase=12345678
+    wpa_key_mgmt=WPA-PSK
+    rsn_pairwise=CCMP
+
+Edit /etc/dhcpcd.conf
+    interface wlan1
+        static ip_address=192.168.4.1/24
+        nohook wpa_supplicant
+
+Edit /etc/default/hostapd
+    DAEMON_CONF="/etc/hostapd/hostapd.conf"
+
+sudo mv /etc/dnsmasq.conf /etc/dnsmasq.conf.orig
+Edit /etc/dnsmasq.conf
+    interface=wlan1
+    dhcp-range=192.168.4.2,192.168.4.20,255.255.255.0,24h
+
+sudo nano /etc/udev/rules.d/70-persistent-net.rules
+    SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="<HOME_MAC>", NAME="wlan0"
+    SUBSYSTEM=="net", ACTION=="add", ATTR{address}=="<ADAPTER_MAC>", NAME="wlan1"
+
+sudo nano /etc/systemd/network/20-wlan1.network
+    [Match]
+    Name=wlan1
+
+    [Network]
+    Address=192.168.4.1/24
+    IPForward=yes
+
+*** May need to do the same for wlan0, but it works for now ***
+
+
+git clone https://github.com/morrownr/8821cu-20210916.git
+cd 8821cu-20210916
+sudo ./install-driver.sh
+sudo reboot
+
+sudo systemctl restart systemd-networkd
+sudo systemctl status hostapd dnsmasq
+
+iw dev (or ip addr show)
+    ensure wlan0 and wlan1 are connected to home network and are streaming
+
+Wait a couple minutes
+
+Plug other AC600 into another computer then connect to VideoStreamPi (password: 12345678), then go to 192.168.4.1:5000/video
