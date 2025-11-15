@@ -58,6 +58,8 @@ void rfm69_disable();
 void rfm69_write_byte(uint8_t addr, uint8_t byte);
 uint8_t rfm69_read_byte(uint8_t addr);
 
+void rfm69_wait_payload_ready();
+
 // TIM2CH0	PA0 (A0)
 // TIM2CH1 	PA1 (A1)
 // 50kHz frequency output
@@ -105,7 +107,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   rfm69_disable();
-//  rfm69_config();
+  rfm69_config();
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
@@ -116,7 +118,7 @@ int main(void)
   while (1)
   {
 	// when FIFO contains at least one byte, receive data
-	while (!(rfm69_read_byte(0x28) & (1 << 6)));
+	rfm69_wait_payload_ready();
 	uint8_t byte = rfm69_read_byte(0x00);
 
 	for (int i = 0; i < 320; i++)
@@ -178,16 +180,51 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void rfm69_config()
 {
-	// Receive Mode
-	// Mode in RegOpMode = 100
+	// Start in Standby mode
+	// Mode in RegOpMode = 001
 	// ListenOn in RegOpMode = 0
-	rfm69_write_byte(0x01, 0b00010000);
+	rfm69_write_byte(0x01, 0b00000010);
 
 	// Packet Mode, uC does not directly control modulation
 	// FSK Modulation, no modulation shaping
 	rfm69_write_byte(0x02, 0b00000000);
 
-	// wait until RX is ready
+	// Set frequency deviation to 50kHz
+	rfm69_write_byte(0x05, 0x03);			// MSB
+	rfm69_write_byte(0x06, 0x33);			// LSB
+
+	// set bitrate to 55.6kbs
+	rfm69_write_byte(0x03, 0x02);			// MSB
+	rfm69_write_byte(0x04, 0x40);			// LSB
+
+	// RF Carrier Frequency - 915 MHz
+	rfm69_write_byte(0x07, 0xE4);
+	rfm69_write_byte(0x08, 0xC0);
+	rfm69_write_byte(0x09, 0x00);
+
+	// Preamble and Sync configuration
+	rfm69_write_byte(0x2C, 0x00); 			// Preamble MSB
+	rfm69_write_byte(0x2D, 0x03); 			// Preamble LSB (3 bytes)
+	rfm69_write_byte(0x2E, 0x88); 			// SyncConfig: Sync on
+	rfm69_write_byte(0x2F, 0x2D); 			// Sync Value 1
+	rfm69_write_byte(0x30, 0xD4); 			// Sync Value 2
+
+	// Packet Configuration settings
+	// Fixed length packets
+	// CRC on
+	// No address filtering
+	rfm69_write_byte(0x37, 0b00010000);
+
+	// Payload length: 1 byte
+	rfm69_write_byte(0x38, 1);
+
+	// Set FIFO threshold, TX will start when FIFO is not empty
+	rfm69_write_byte(0x3C, 0x8F);
+
+	// Switch to Receive Mode: 100
+	rfm69_write_byte(0x01, 0b00001000);
+
+	// wait until RxReady bit is set
 	while (!(rfm69_read_byte(0x27) & (1 << 6)));
 }
 
@@ -225,6 +262,11 @@ uint8_t rfm69_read_byte(uint8_t addr)
 	rfm69_disable();
 
 	return byte;
+}
+
+void rfm69_wait_payload_ready()
+{
+	while (!(rfm69_read_byte(0x28) & (1 << 2)));
 }
 
 void motor_right_set_duty(uint16_t duty)

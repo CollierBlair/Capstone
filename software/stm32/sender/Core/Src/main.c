@@ -268,7 +268,7 @@ void rfm69_send(uint8_t byte)
 	// Switch to TX mode
 	rfm69_write_byte(0x01, 0x0C);
 
-	// Wait until packet has been sent, then return to standy mode
+	// Wait until packet has been sent, then return to standby mode
 	while (!(rfm69_read_byte(0x28) & (1 << 3)));
 	rfm69_write_byte(0x01, 0b00000010);
 }
