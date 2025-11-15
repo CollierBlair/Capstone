@@ -57,6 +57,8 @@ void rfm69_disable();
 
 void rfm69_write_byte(uint8_t addr, uint8_t byte);
 uint8_t rfm69_read_byte(uint8_t addr);
+
+void rfm69_send(uint8_t byte);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -118,7 +120,7 @@ int main(void)
 	ser_buff = 'a';
 
 	// send data byte over radio to receiver
-	rfm69_write_byte(0x00, ser_buff);
+	rfm_send(ser_buff);
 	HAL_Delay(500);
 
     /* USER CODE END WHILE */
@@ -174,15 +176,49 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void rfm69_config()
 {
-	// Transmit Mode
-	// Mode in RegOpMode = 011
+	// Start in Standby mode
+	// Mode in RegOpMode = 001
 	// ListenOn in RegOpMode = 0
-	rfm69_write_byte(0x01, 0b00001100);
-	while (rfm69_read_byte(0x01) != 0b00001100);
+	rfm69_write_byte(0x01, 0b00000010);
 
 	// Packet Mode, uC does not directly control modulation
 	// FSK Modulation, no modulation shaping
 	rfm69_write_byte(0x02, 0b00000000);
+
+	// Set frequency deviation to 50kHz
+	rfm69_write_byte(0x05, 0x03);			// MSB
+	rfm69_write_byte(0x06, 0x33);			// LSB
+
+	// set bitrate to 55.6kbs
+	rfm69_write_byte(0x03, 0x02);			// MSB
+	rfm69_write_byte(0x04, 0x40);			// LSB
+
+	// RF Carrier Frequency - 915 MHz
+	rfm69_write_byte(0x07, 0xE4);
+	rfm69_write_byte(0x08, 0xC0);
+	rfm69_write_byte(0x09, 0x00);
+
+	// Preamble and Sync configuration
+	rfm69_write_byte(0x2C, 0x00); 			// Preamble MSB
+	rfm69_write_byte(0x2D, 0x03); 			// Preamble LSB (3 bytes)
+	rfm69_write_byte(0x2E, 0x88); 			// SyncConfig: Sync on
+	rfm69_write_byte(0x2F, 0x2D); 			// Sync Value 1
+	rfm69_write_byte(0x30, 0xD4); 			// Sync Value 2
+
+	// Packet Configuration settings
+	// Fixed length packets
+	// CRC on
+	// No address filtering
+	rfm69_write_byte(0x37, 0b00010000);
+
+	// Payload length: 1 byte
+	rfm69_write_byte(0x38, 1);
+
+	// Set FIFO threshold, TX will start when FIFO is not empty
+	rfm69_write_byte(0x3C, 0x8F);
+
+	// Set power level to highest mode
+	rfm69_write_byte(0x11, 0x5F);
 
 	// wait until PA ramps up and radio is ready
 	while (!(rfm69_read_byte(0x27) & (1 << 5)));
@@ -222,6 +258,19 @@ uint8_t rfm69_read_byte(uint8_t addr)
 	rfm69_disable();
 
 	return byte;
+}
+
+void rfm69_send(uint8_t byte)
+{
+	// Write payload into FIFO register
+	rfm69_write_byte(0x00, byte);
+
+	// Switch to TX mode
+	rfm69_write_byte(0x01, 0x0C);
+
+	// Wait until packet has been sent, then return to standy mode
+	while (!(rfm69_read_byte(0x28) & (1 << 3)));
+	rfm69_write_byte(0x01, 0b00000010);
 }
 /* USER CODE END 4 */
 
