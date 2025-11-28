@@ -34,7 +34,10 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define FXOSC		32000000
+#define BITRATE		9600
 
+#define RFM_RST		GPIO_PIN_0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,14 +54,16 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-void rfm69_config();
-void rfm69_enable();
-void rfm69_disable();
+void rfm_config();
+void rfm_select();
+void rfm_deselect();
+void rfm_reset();
 
-void rfm69_write_byte(uint8_t addr, uint8_t byte);
-uint8_t rfm69_read_byte(uint8_t addr);
+void rfm_write_reg(uint8_t addr, uint8_t byte);
+uint8_t rfm_read_reg(uint8_t addr);
 
-void rfm69_send(uint8_t byte);
+void rfm_write_fifo(uint8_t * data, uint8_t len);
+void rfm_send(uint8_t * data, uint8_t len);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,11 +108,13 @@ int main(void)
   MX_SPI1_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  rfm_deselect();
+  rfm_reset();
 
-  rfm69_disable();
-  rfm69_config();
+  rfm_config();
 
-  uint8_t ser_buff;
+
+  uint8_t ser_buff = 0x55;
 
   /* USER CODE END 2 */
 
@@ -117,11 +124,10 @@ int main(void)
   {
 	 // receive 1 byte from serial buffer for motor control
 //	HAL_UART_Receive(&huart2, &ser_buff, 1, 1000);
-	ser_buff = 'a';
 
 	// send data byte over radio to receiver
-	rfm_send(ser_buff);
-	HAL_Delay(500);
+	rfm_send(&ser_buff, 1);
+	HAL_Delay(2000);
 
     /* USER CODE END WHILE */
 
@@ -174,103 +180,143 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-void rfm69_config()
+void rfm_config()
 {
 	// Start in Standby mode
 	// Mode in RegOpMode = 001
 	// ListenOn in RegOpMode = 0
-	rfm69_write_byte(0x01, 0b00000010);
+	rfm_write_reg(0x01, 0x04);
+
+	// wait until sender goes into standby mode
+	while (!(rfm_read_reg(0x27) & 0x80));
 
 	// Packet Mode, uC does not directly control modulation
 	// FSK Modulation, no modulation shaping
-	rfm69_write_byte(0x02, 0b00000000);
+	rfm_write_reg(0x02, 0x00);
 
-	// Set frequency deviation to 50kHz
-	rfm69_write_byte(0x05, 0x03);			// MSB
-	rfm69_write_byte(0x06, 0x33);			// LSB
+	uint16_t bitrate = FXOSC / BITRATE;
+	rfm_write_reg(0x03, (uint8_t) (bitrate >> 8));
+	rfm_write_reg(0x04, (uint8_t) bitrate);
 
-	// set bitrate to 55.6kbs
-	rfm69_write_byte(0x03, 0x02);			// MSB
-	rfm69_write_byte(0x04, 0x40);			// LSB
+	// 5 kHz frequency deviation
+	rfm_write_reg(0x05, 0x00);
+	rfm_write_reg(0x06, 0x52);
 
 	// RF Carrier Frequency - 915 MHz
-	rfm69_write_byte(0x07, 0xE4);
-	rfm69_write_byte(0x08, 0xC0);
-	rfm69_write_byte(0x09, 0x00);
+	rfm_write_reg(0x07, 0xE4);
+	rfm_write_reg(0x08, 0xC0);
+	rfm_write_reg(0x09, 0x00);
+
+	// standard AFC routine
+	rfm_write_reg(0x0B, 0x00);
+
+	// AFC performed every time RX mode is entered
+	rfm_write_reg(0x1E, 0x04);
+
+	// PayloadSent on DIO0
+	rfm_write_reg(0x25, 0x00);
+
+	// default RSSI threshold
+	rfm_write_reg(0x29, 0xE4);
 
 	// Preamble and Sync configuration
-	rfm69_write_byte(0x2C, 0x00); 			// Preamble MSB
-	rfm69_write_byte(0x2D, 0x03); 			// Preamble LSB (3 bytes)
-	rfm69_write_byte(0x2E, 0x88); 			// SyncConfig: Sync on
-	rfm69_write_byte(0x2F, 0x2D); 			// Sync Value 1
-	rfm69_write_byte(0x30, 0xD4); 			// Sync Value 2
+	rfm_write_reg(0x2C, 0x00); 			// Preamble MSB
+	rfm_write_reg(0x2D, 0x08); 			// Preamble LSB (8 bytes)
+	rfm_write_reg(0x2E, 0x88); 			// SyncConfig: Sync on
+	rfm_write_reg(0x2F, 0x2D); 			// Sync Value 1
+	rfm_write_reg(0x30, 0xD4); 			// Sync Value 2
 
 	// Packet Configuration settings
 	// Fixed length packets
-	// CRC on
+	// CRC off
 	// No address filtering
-	rfm69_write_byte(0x37, 0b00010000);
+	rfm_write_reg(0x37, 0x00);
 
 	// Payload length: 1 byte
-	rfm69_write_byte(0x38, 1);
+	rfm_write_reg(0x38, 1);
 
 	// Set FIFO threshold, TX will start when FIFO is not empty
-	rfm69_write_byte(0x3C, 0x8F);
+	rfm_write_reg(0x3C, 0x8F);
 
-	// Set power level to highest mode
-	rfm69_write_byte(0x11, 0x5F);
+	// Set output on PA1 + PA2 (MUST)!!!!
+	rfm_write_reg(0x11, 0x7F);
+	rfm_write_reg(0x13, 0x0F);
+	rfm_write_reg(0x5A, 0x5D);
+	rfm_write_reg(0x5C, 0x7C);
 
 	// wait until PA ramps up and radio is ready
-	while (!(rfm69_read_byte(0x27) & (1 << 5)));
+	while (!(rfm_read_reg(0x27) & 0x80));
 }
 
-void rfm69_enable()
+void rfm_select()
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
 }
 
-void rfm69_disable()
+void rfm_deselect()
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 }
 
-void rfm69_write_byte(uint8_t addr, uint8_t byte)
+void rfm_reset()
+{
+	HAL_GPIO_WritePin(GPIOA, RFM_RST, GPIO_PIN_SET);
+	HAL_Delay(1);
+	HAL_GPIO_WritePin(GPIOA, RFM_RST, GPIO_PIN_RESET);
+	HAL_Delay(10);
+}
+
+void rfm_write_reg(uint8_t addr, uint8_t byte)
 {
 	// MSB of addr must be 1 on write
-	uint8_t buff[2] = {addr | 0b10000000, byte};
+	uint8_t buff[2] = {addr | 0x80, byte};
 
-	rfm69_enable();
+	rfm_select();
 	HAL_SPI_Transmit(&hspi1, buff, 2, 1000);
-	rfm69_disable();
+	rfm_deselect();
 }
 
-uint8_t rfm69_read_byte(uint8_t addr)
+uint8_t rfm_read_reg(uint8_t addr)
 {
-
-	uint8_t byte;
 
 	// MSB must be 0 for read
-	addr &= ~0b10000000;
+	addr &= ~0x80;
 
-	rfm69_enable();
-	HAL_SPI_Transmit(&hspi1, &addr, 1, 1000);
-	HAL_SPI_Receive(&hspi1, &byte, 1, 1000);
-	rfm69_disable();
+	uint8_t send_buff[2] = {addr, 0};
+	uint8_t rcv_buff[2];
 
-	return byte;
+	rfm_select();
+	HAL_SPI_TransmitReceive(&hspi1, send_buff, rcv_buff, 2, 1000);
+	rfm_deselect();
+
+	return rcv_buff[1];
 }
 
-void rfm69_send(uint8_t byte)
+void rfm_write_fifo(uint8_t * data, uint8_t len)
+{
+	uint8_t send_buff[len + 1];
+	send_buff[0] = 0x80;
+	for (uint8_t i = 0; i < len; i++)
+	{
+		send_buff[i+1] = data[i];
+	}
+
+	rfm_select();
+	HAL_SPI_Transmit(&hspi1, send_buff, len + 1, 1000);
+	rfm_deselect();
+}
+
+void rfm_send(uint8_t * data, uint8_t len)
 {
 	// Write payload into FIFO register
-	rfm69_write_byte(0x00, byte);
+	rfm_write_fifo(data, len);
 
 	// Switch to TX mode
-	rfm69_write_byte(0x01, 0x0C);
+	rfm_write_reg(0x01, 0x0C);
 
 	// Wait until packet has been sent, then return to standby mode
-	while (!(rfm69_read_byte(0x28) & (1 << 3)));
-	rfm69_write_byte(0x01, 0b00000010);
+	while (!(rfm_read_reg(0x28) & 0x08));
+	rfm_write_reg(0x01, 0x04);
 }
 /* USER CODE END 4 */
 
