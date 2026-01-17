@@ -19,16 +19,16 @@
  *
  * Hardware connections (based on provided pinout):
  * LEFT TREAD:
- * - Left Front motor PWM: PB0 (TIM1_CH2N)
- * - Left Front motor DIR: PA9 (USART1_TX)
- * - Left Rear motor PWM: PB1 (TIM1_CH3N)
- * - Left Rear motor DIR: PA10 (USART1_RX)
+ * - Left Front motor PWM: PB0 (TIM1_CH2N) PIN:D3
+ * - Left Front motor DIR: PA9 (USART1_TX) PIN:D1
+ * - Left Rear motor PWM: PB1 (TIM1_CH3N) PIN:D6
+ * - Left Rear motor DIR: PA10 (USART1_RX) PIN:D0
  *
  * RIGHT TREAD:
- * - Right Front motor PWM: PA8 (TIM1_CH1)
- * - Right Front motor DIR: PA12
- * - Right Rear motor PWM: PB6 (TIM16_CH1N)
- * - Right Rear motor DIR: PC14
+ * - Right Front motor PWM: PA8 (TIM1_CH1) PIN:D9
+ * - Right Front motor DIR: PA12 			PIN:D2
+ * - Right Rear motor PWM: PB6 (TIM16_CH1N) PIN:D5
+ * - Right Rear motor DIR: PA11				PIN:D10
  *
  * BUTTONS (using available GPIO - only used in NORMAL MODE):
  * - Forward button: PB4 (SPI1_MISO)
@@ -50,7 +50,7 @@
 
 // Test mode - set to 1 for hardwired PWM testing, 0 for normal button control
 #define TEST_MODE 1
-#define TEST_PWM_DUTY 50      // Test PWM duty cycle (0-100%)
+#define TEST_PWM_DUTY 20      // Test PWM duty cycle (0-100%)
 
 // Ramping parameters
 #define RAMP_UP_STEP 2        // Speed increment per update (faster = more aggressive)
@@ -97,6 +97,10 @@ void motor_stop(void);
 /*
  * System Clock Configuration
  * Configure the system clock to 80 MHz
+ * 
+ * Note: If WWDG (Window Watchdog) interrupts occur, ensure:
+ * 1. Watchdog is disabled via option bytes, OR
+ * 2. WWDG_IRQHandler is properly implemented (see stm32l4xx_it.c)
  */
 void SystemClock_Config(void) {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -153,9 +157,12 @@ void motor_init(void) {
     // Enable clocks
     __HAL_RCC_GPIOA_CLK_ENABLE();
     __HAL_RCC_GPIOB_CLK_ENABLE();
-    __HAL_RCC_GPIOC_CLK_ENABLE();
     __HAL_RCC_TIM1_CLK_ENABLE();
     __HAL_RCC_TIM16_CLK_ENABLE();
+    
+    // Disable USART1 since we're using PA9/PA10 as GPIO for direction control
+    // This prevents conflicts when configuring these pins as GPIO
+    __HAL_RCC_USART1_CLK_DISABLE();
 
     // ===== Configure PWM GPIO Pins =====
 
@@ -167,31 +174,37 @@ void motor_init(void) {
     GPIO_InitStruct.Alternate = GPIO_AF1_TIM1;
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
+    // PB0 (CH2N) and PB1 (CH3N) for left motors - must explicitly set all fields
     GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF1_TIM1;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-    // TIM16 pin: PB6 (CH1N)
+    // TIM16 pin: PB6 (CH1N) for right rear motor - must explicitly set all fields
     GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
     GPIO_InitStruct.Alternate = GPIO_AF14_TIM16;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     // ===== Configure Direction GPIO Pins =====
-    GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_12;
+    // PA9 (USART1_TX), PA10 (USART1_RX), PA11, and PA12 used as GPIO outputs
+    // These pins can be used as GPIO when USART1 is disabled (done above)
+    GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_10 | GPIO_PIN_11 | GPIO_PIN_12;
     GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Alternate = 0;
+    GPIO_InitStruct.Alternate = 0;  // GPIO mode, not alternate function
     HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-    GPIO_InitStruct.Pin = GPIO_PIN_14;
-    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
     // Initialize direction pins to low
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET);
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET);
-    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET);
 
     // ===== Configure TIM1 (3 channels) =====
     htim1.Instance = TIM1;
@@ -275,11 +288,38 @@ void motor_init(void) {
         Error_Handler();
     }
 
+    // Clear any pending TIM1 interrupt flags before starting
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_UPDATE);
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_BREAK);
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_TRIGGER);
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC1);
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC2);
+    __HAL_TIM_CLEAR_FLAG(&htim1, TIM_FLAG_CC3);
+    
+    // Disable TIM1 interrupts - we're using PWM output mode, not interrupt mode
+    // This prevents unwanted interrupts from causing crashes
+    __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_UPDATE);
+    __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_BREAK);
+    __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_TRIGGER);
+    __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_CC1);
+    __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_CC2);
+    __HAL_TIM_DISABLE_IT(&htim1, TIM_IT_CC3);
+    
+    // Clear any pending TIM16 interrupt flags
+    __HAL_TIM_CLEAR_FLAG(&htim16, TIM_FLAG_UPDATE);
+    __HAL_TIM_CLEAR_FLAG(&htim16, TIM_FLAG_CC1);
+    __HAL_TIM_DISABLE_IT(&htim16, TIM_IT_UPDATE);
+    __HAL_TIM_DISABLE_IT(&htim16, TIM_IT_CC1);
+    
     // Start PWM on all channels
     HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);    // Right Front (CH1)
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_2); // Left Front (CH2N)
     HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_3); // Left Rear (CH3N)
     HAL_TIMEx_PWMN_Start(&htim16, TIM_CHANNEL_1);// Right Rear (CH1N)
+    
+    // Step 1: Enable Main Output Enable (MOE) for TIM1
+    // Required for complementary channels (CH2N, CH3N) to output PWM
+    __HAL_TIM_MOE_ENABLE(&htim1);
 }
 
 /*
@@ -506,12 +546,12 @@ void set_motor_pwm(int8_t left_speed, int8_t right_speed) {
     if (right_speed >= 0) {
         // Forward direction
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_SET);  // Right Front DIR
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);  // Right Rear DIR
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_SET);  // Right Rear DIR
         right_abs_speed = right_speed;
     } else {
         // Backward direction
         HAL_GPIO_WritePin(GPIOA, GPIO_PIN_12, GPIO_PIN_RESET); // Right Front DIR
-        HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_RESET); // Right Rear DIR
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_11, GPIO_PIN_RESET); // Right Rear DIR
         right_abs_speed = -right_speed;
     }
 
