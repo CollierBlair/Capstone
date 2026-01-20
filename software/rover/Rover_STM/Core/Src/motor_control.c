@@ -46,7 +46,7 @@
 // Motor parameters
 #define MAX_SPEED 100
 #define MIN_SPEED 0
-#define PWM_PERIOD 999
+#define PWM_PERIOD 99
 
 // Test mode - set to 1 for hardwired PWM testing, 0 for normal button control
 #define TEST_MODE 1
@@ -208,7 +208,7 @@ void motor_init(void) {
 
     // ===== Configure TIM1 (3 channels) =====
     htim1.Instance = TIM1;
-    htim1.Init.Prescaler = 79;  // 80MHz / 80 = 1MHz
+    htim1.Init.Prescaler = 3999;  // 80MHz / 3999 = 20 kHz
     htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
     htim1.Init.Period = PWM_PERIOD;
     htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -268,7 +268,7 @@ void motor_init(void) {
 
     // ===== Configure TIM16 (1 channel) =====
     htim16.Instance = TIM16;
-    htim16.Init.Prescaler = 79;  // 80MHz / 80 = 1MHz
+    htim16.Init.Prescaler = 3999;  // 80MHz / 3999 = 20 kHz
     htim16.Init.CounterMode = TIM_COUNTERMODE_UP;
     htim16.Init.Period = PWM_PERIOD;
     htim16.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
