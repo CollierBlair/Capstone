@@ -6,7 +6,7 @@
   ******************************************************************************
   * @attention
   *
-  * Copyright (c) 2025 STMicroelectronics.
+  * Copyright (c) 2026 STMicroelectronics.
   * All rights reserved.
   *
   * This software is licensed under terms that can be found in the LICENSE file
@@ -180,7 +180,16 @@ void PendSV_Handler(void)
 /**
   * @brief This function handles System tick timer.
   */
+void SysTick_Handler(void)
+{
+  /* USER CODE BEGIN SysTick_IRQn 0 */
 
+  /* USER CODE END SysTick_IRQn 0 */
+  HAL_IncTick();
+  /* USER CODE BEGIN SysTick_IRQn 1 */
+
+  /* USER CODE END SysTick_IRQn 1 */
+}
 
 /******************************************************************************/
 /* STM32L4xx Peripheral Interrupt Handlers                                    */
@@ -190,80 +199,5 @@ void PendSV_Handler(void)
 /******************************************************************************/
 
 /* USER CODE BEGIN 1 */
-
-/**
-  * @brief This function handles Window watchdog interrupt.
-  * @note The watchdog is likely enabled by default or by option bytes.
-  *       This handler prevents the watchdog from causing system resets.
-  */
-void WWDG_IRQHandler(void)
-{
-  /* USER CODE BEGIN WWDG_IRQn 0 */
-  
-  /* Clear the watchdog interrupt flag */
-  /* Note: If watchdog is enabled, you may need to refresh it here */
-  /* For now, we just clear the interrupt to prevent crashes */
-  
-  /* USER CODE END WWDG_IRQn 0 */
-  
-  /* USER CODE BEGIN WWDG_IRQn 1 */
-  
-  /* USER CODE END WWDG_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM1 break interrupt and TIM15 global interrupt.
-  */
-void TIM1_BRK_TIM15_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM1_BRK_TIM15_IRQn 0 */
-
-  /* USER CODE END TIM1_BRK_TIM15_IRQn 0 */
-  /* USER CODE BEGIN TIM1_BRK_TIM15_IRQn 1 */
-
-  /* USER CODE END TIM1_BRK_TIM15_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM1 update interrupt and TIM16 global interrupt.
-  */
-void TIM1_UP_TIM16_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM1_UP_TIM16_IRQn 0 */
-  // Clear interrupt flags directly from the timer registers
-  // This prevents unwanted interrupts from causing crashes
-  TIM1->SR &= ~TIM_SR_UIF;  // Clear TIM1 update flag
-  TIM16->SR &= ~TIM_SR_UIF; // Clear TIM16 update flag
-  /* USER CODE END TIM1_UP_TIM16_IRQn 0 */
-  /* USER CODE BEGIN TIM1_UP_TIM16_IRQn 1 */
-
-  /* USER CODE END TIM1_UP_TIM16_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM1 trigger and commutation interrupts.
-  */
-void TIM1_TRG_COM_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM1_TRG_COM_IRQn 0 */
-
-  /* USER CODE END TIM1_TRG_COM_IRQn 0 */
-  /* USER CODE BEGIN TIM1_TRG_COM_IRQn 1 */
-
-  /* USER CODE END TIM1_TRG_COM_IRQn 1 */
-}
-
-/**
-  * @brief This function handles TIM1 capture compare interrupt.
-  */
-void TIM1_CC_IRQHandler(void)
-{
-  /* USER CODE BEGIN TIM1_CC_IRQn 0 */
-
-  /* USER CODE END TIM1_CC_IRQn 0 */
-  /* USER CODE BEGIN TIM1_CC_IRQn 1 */
-
-  /* USER CODE END TIM1_CC_IRQn 1 */
-}
 
 /* USER CODE END 1 */

@@ -1,0 +1,15 @@
+../Core/Src/main.c:90:6:SystemClock_Config	96	static
+../Core/Src/main.c:137:6:motor_init	40	static
+../Core/Src/main.c:206:6:led_init	32	static
+../Core/Src/main.c:223:6:button_init	40	static
+../Core/Src/main.c:242:6:timer6_init	16	static
+../Core/Src/main.c:266:6:TIM6_DAC_IRQHandler	8	static
+../Core/Src/main.c:273:6:HAL_TIM_PeriodElapsedCallback	16	static
+../Core/Src/main.c:282:10:millis	4	static
+../Core/Src/main.c:289:13:read_buttons	24	static
+../Core/Src/main.c:304:6:process_inputs	24	static
+../Core/Src/main.c:347:6:update_motor_speeds	8	static
+../Core/Src/main.c:380:6:motor_stop	8	static
+../Core/Src/main.c:391:6:set_motor_pwm	24	static
+../Core/Src/main.c:422:6:Error_Handler	16	static,ignoring_inline_asm
+../Core/Src/main.c:435:5:main	16	static
