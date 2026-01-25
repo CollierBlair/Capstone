@@ -14,116 +14,114 @@ Key responsibilities:
 """
 
 import sys
-import json
-import time
-import serial
-import serial.tools.list_ports
+import urllib.request
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                            QHBoxLayout, QLabel, QPushButton, QComboBox, 
-                            QGroupBox, QGridLayout, QMessageBox)
+                            QHBoxLayout, QLabel, QPushButton, QGroupBox, 
+                            QMessageBox)
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtGui import QFont, QImage, QPixmap
 
 
-class LoRaCommunicator(QThread):
+class VideoReceiver(QThread):
     """
-    Handles LoRa communication via serial port.
+    Handles video stream reception from Pi via WiFi.
     
-    This class manages the serial communication with the LoRa module,
-    sending commands to the rover and receiving telemetry data.
+    This class manages the HTTP connection to the Pi's video stream,
+    decodes JPEG frames, and emits them for display in the GUI.
     """
     
     # Signals for GUI updates
+    frame_ready = pyqtSignal(QPixmap)
     connection_status_changed = pyqtSignal(bool)
-    telemetry_received = pyqtSignal(dict)
     error_occurred = pyqtSignal(str)
     
-    def __init__(self):
+    def __init__(self, video_url="http://192.168.1.200:5000/video"):
         super().__init__()
-        self.serial_connection = None
+        self.video_url = video_url
         self.is_connected = False
-        self.port_name = None
-        self.baud_rate = 9600  # Default for SX1262 LoRa modules
+        self.stream = None
+        self.running = False
         
-    def connect_to_lora(self, port_name: str, baud_rate: int = 9600):
-        """Connect to LoRa module via serial port."""
+    def connect_to_stream(self):
+        """Connect to video stream from Pi."""
         try:
-            self.serial_connection = serial.Serial(
-                port=port_name,
-                baudrate=baud_rate,
-                bytesize=serial.EIGHTBITS,
-                parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE,
-                timeout=1
-            )
-            self.port_name = port_name
-            self.baud_rate = baud_rate
+            self.stream = urllib.request.urlopen(self.video_url, timeout=5)
             self.is_connected = True
+            self.running = True
             self.connection_status_changed.emit(True)
-            print(f"Connected to LoRa module on {port_name} at {baud_rate} baud")
+            print(f"Connected to video stream at {self.video_url}")
             return True
-            
         except Exception as e:
             self.is_connected = False
             self.connection_status_changed.emit(False)
-            self.error_occurred.emit(f"Failed to connect to LoRa: {str(e)}")
-            print(f"LoRa connection error: {e}")
+            self.error_occurred.emit(f"Failed to connect to video stream: {str(e)}")
+            print(f"Video stream connection error: {e}")
             return False
     
-    def disconnect_from_lora(self):
-        """Disconnect from LoRa module."""
-        if self.serial_connection and self.serial_connection.is_open:
-            self.serial_connection.close()
+    def disconnect_from_stream(self):
+        """Disconnect from video stream."""
+        self.running = False
+        if self.stream:
+            try:
+                self.stream.close()
+            except:
+                pass
+        self.stream = None
         self.is_connected = False
         self.connection_status_changed.emit(False)
-        print("Disconnected from LoRa module")
-    
-    def send_command(self, command: str):
-        """Send command to rover via LoRa."""
-        if not self.is_connected or not self.serial_connection:
-            print("Not connected to LoRa module")
-            return False
-        
-        try:
-            # Format command as JSON
-            command_data = {
-                "type": "movement",
-                "command": command,
-                "timestamp": time.time()
-            }
-            
-            # Send command
-            message = json.dumps(command_data) + "\n"
-            self.serial_connection.write(message.encode())
-            print(f"Sent command: {command}")
-            return True
-            
-        except Exception as e:
-            self.error_occurred.emit(f"Failed to send command: {str(e)}")
-            print(f"Command send error: {e}")
-            return False
+        print("Disconnected from video stream")
     
     def run(self):
-        """Main thread loop for receiving telemetry data."""
-        while self.is_connected and self.serial_connection:
+        """Main thread loop for receiving and decoding video frames."""
+        bytes_data = b''
+        
+        while self.running and self.is_connected:
             try:
-                if self.serial_connection.in_waiting > 0:
-                    # Read telemetry data from rover
-                    data = self.serial_connection.readline().decode().strip()
-                    if data:
-                        try:
-                            telemetry = json.loads(data)
-                            self.telemetry_received.emit(telemetry)
-                        except json.JSONDecodeError:
-                            print(f"Invalid JSON received: {data}")
+                if not self.stream:
+                    self.msleep(100)
+                    continue
+                
+                # Read a chunk of the stream
+                chunk = self.stream.read(1024)
+                if not chunk:
+                    # Stream ended, try to reconnect
+                    self.error_occurred.emit("Video stream ended, attempting to reconnect...")
+                    if self.connect_to_stream():
+                        bytes_data = b''
+                        continue
+                    else:
+                        break
+                
+                bytes_data += chunk
+                
+                # Look for JPEG start and end markers
+                start_marker = bytes_data.find(b'\xff\xd8')
+                end_marker = bytes_data.find(b'\xff\xd9')
+                
+                if start_marker != -1 and end_marker != -1 and end_marker > start_marker:
+                    # Extract JPEG frame
+                    jpg = bytes_data[start_marker:end_marker + 2]
+                    bytes_data = bytes_data[end_marker + 2:]
+                    
+                    # Decode JPEG directly into QImage
+                    qimage = QImage()
+                    if qimage.loadFromData(jpg):
+                        # Convert to QPixmap and emit signal
+                        pixmap = QPixmap.fromImage(qimage)
+                        # Scale to fit video label (optional - can be done in GUI)
+                        self.frame_ready.emit(pixmap)
                 
                 # Small delay to prevent excessive CPU usage
                 self.msleep(10)
                 
             except Exception as e:
-                self.error_occurred.emit(f"Telemetry receive error: {str(e)}")
-                print(f"Telemetry error: {e}")
-                break
+                self.error_occurred.emit(f"Video receive error: {str(e)}")
+                print(f"Video error: {e}")
+                # Try to reconnect after error
+                self.msleep(1000)
+                if self.running:
+                    self.connect_to_stream()
+                    bytes_data = b''
 
 
 class RoverControlGUI(QMainWindow):
@@ -136,14 +134,14 @@ class RoverControlGUI(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Thermal Rover Control v1.0 - LoRa Ready")
+        self.setWindowTitle("Thermal Rover Control v1.0")
         self.setGeometry(100, 100, 900, 700)
         
-        # Initialize LoRa communication
-        self.lora_comm = LoRaCommunicator()
-        self.lora_comm.connection_status_changed.connect(self.update_connection_status)
-        self.lora_comm.telemetry_received.connect(self.handle_telemetry)
-        self.lora_comm.error_occurred.connect(self.handle_error)
+        # Initialize video receiver
+        self.video_receiver = VideoReceiver()
+        self.video_receiver.frame_ready.connect(self.update_video_frame)
+        self.video_receiver.connection_status_changed.connect(self.update_connection_status)
+        self.video_receiver.error_occurred.connect(self.handle_error)
         
         # Initialize the UI
         self.init_ui()
@@ -156,8 +154,8 @@ class RoverControlGUI(QMainWindow):
         self.key_timer.timeout.connect(self.handle_continuous_keys)
         self.key_timer.start(50)  # 20 FPS for smooth movement
         
-        # Scan for available serial ports
-        self.scan_serial_ports()
+        # Auto-connect to video stream on startup
+        self.connect_to_video()
         
     def init_ui(self):
         """Initialize the user interface."""
@@ -172,8 +170,8 @@ class RoverControlGUI(QMainWindow):
         # Left side - Video feed area (takes up most space)
         video_layout = QVBoxLayout()
         
-        # Video feed placeholder
-        self.video_label = QLabel("Video Feed\n(Placeholder for thermal camera)")
+        # Video feed display
+        self.video_label = QLabel("Connecting to video stream...")
         self.video_label.setFont(QFont("Arial", 14))
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("""
@@ -186,6 +184,7 @@ class RoverControlGUI(QMainWindow):
                 min-height: 400px;
             }
         """)
+        self.video_label.setScaledContents(True)  # Scale video to fit label
         video_layout.addWidget(self.video_label)
         
         # Status display for video area
@@ -270,55 +269,31 @@ class RoverControlGUI(QMainWindow):
         
         controls_layout.addLayout(button_layout)
         
-        # LoRa Connection Settings
-        lora_group = QGroupBox("LoRa Settings")
-        lora_layout = QVBoxLayout()
-        
-        # Serial port selection
-        port_layout = QHBoxLayout()
-        port_layout.addWidget(QLabel("Port:"))
-        self.port_combo = QComboBox()
-        self.port_combo.setMinimumWidth(120)
-        port_layout.addWidget(self.port_combo)
-        lora_layout.addLayout(port_layout)
-        
-        # Baud rate selection
-        baud_layout = QHBoxLayout()
-        baud_layout.addWidget(QLabel("Baud:"))
-        self.baud_combo = QComboBox()
-        self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
-        self.baud_combo.setCurrentText("9600")
-        baud_layout.addWidget(self.baud_combo)
-        lora_layout.addLayout(baud_layout)
+        # Video Connection Settings
+        video_group = QGroupBox("Video Stream")
+        video_layout = QVBoxLayout()
         
         # Connect/Disconnect buttons
-        self.connect_btn = QPushButton("Connect")
-        self.connect_btn.clicked.connect(self.connect_to_lora)
+        self.connect_btn = QPushButton("Connect to Video")
+        self.connect_btn.clicked.connect(self.connect_to_video)
         self.connect_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; padding: 6px; }")
-        lora_layout.addWidget(self.connect_btn)
+        video_layout.addWidget(self.connect_btn)
         
         self.disconnect_btn = QPushButton("Disconnect")
-        self.disconnect_btn.clicked.connect(self.disconnect_from_lora)
+        self.disconnect_btn.clicked.connect(self.disconnect_from_video)
         self.disconnect_btn.setEnabled(False)
         self.disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 6px; }")
-        lora_layout.addWidget(self.disconnect_btn)
+        video_layout.addWidget(self.disconnect_btn)
         
-        lora_group.setLayout(lora_layout)
-        controls_layout.addWidget(lora_group)
+        video_group.setLayout(video_layout)
+        controls_layout.addWidget(video_group)
         
         # Connection status
-        self.connection_label = QLabel("LoRa: Disconnected")
+        self.connection_label = QLabel("Video: Disconnected")
         self.connection_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.connection_label.setAlignment(Qt.AlignCenter)
         self.connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
         controls_layout.addWidget(self.connection_label)
-        
-        # Telemetry display
-        self.telemetry_label = QLabel("Telemetry: No data")
-        self.telemetry_label.setFont(QFont("Arial", 9))
-        self.telemetry_label.setAlignment(Qt.AlignCenter)
-        self.telemetry_label.setStyleSheet("QLabel { background-color: #f5f5f5; padding: 6px; border-radius: 3px; }")
-        controls_layout.addWidget(self.telemetry_label)
         
         # Add controls to main layout (1/4 of the space)
         main_layout.addLayout(controls_layout, 1)
@@ -399,96 +374,75 @@ class RoverControlGUI(QMainWindow):
             self.status_label.setText(f"Status: Moving {direction}")
             self.status_label.setStyleSheet("QLabel { background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; }")
         
-        # Send command to rover via LoRa
+        # Send command to rover (placeholder for future command implementation)
         print(f"Rover Command: {direction}")
-        self.send_rover_command(direction)
+        # TODO: Implement command sending via wireless communication
     
-    def send_rover_command(self, command):
-        """Send command to rover via LoRa communication."""
-        if self.lora_comm.is_connected:
-            success = self.lora_comm.send_command(command)
-            if not success:
-                print(f"Failed to send command: {command}")
-        else:
-            print(f"LoRa not connected. Command: {command}")
-    
-    def scan_serial_ports(self):
-        """Scan for available serial ports and populate the combo box."""
-        ports = serial.tools.list_ports.comports()
-        self.port_combo.clear()
-        
-        for port in ports:
-            # On Mac, look for USB serial devices (common for LoRa modules)
-            if "usb" in port.device.lower() or "tty.usb" in port.device.lower():
-                self.port_combo.addItem(f"{port.device} - {port.description}")
-            else:
-                self.port_combo.addItem(f"{port.device} - {port.description}")
-        
-        if self.port_combo.count() == 0:
-            self.port_combo.addItem("No serial ports found")
-            self.connect_btn.setEnabled(False)
-    
-    def connect_to_lora(self):
-        """Connect to LoRa module using selected port and baud rate."""
-        if self.port_combo.currentText() == "No serial ports found":
-            QMessageBox.warning(self, "No Ports", "No serial ports available!")
-            return
-        
-        # Extract port name from combo box text
-        port_text = self.port_combo.currentText()
-        port_name = port_text.split(" - ")[0]
-        baud_rate = int(self.baud_combo.currentText())
-        
-        # Attempt connection
-        if self.lora_comm.connect_to_lora(port_name, baud_rate):
-            self.lora_comm.start()  # Start the telemetry receiving thread
+    def connect_to_video(self):
+        """Connect to video stream from Pi."""
+        if self.video_receiver.connect_to_stream():
+            self.video_receiver.start()  # Start the video receiving thread
             self.connect_btn.setEnabled(False)
             self.disconnect_btn.setEnabled(True)
-            self.port_combo.setEnabled(False)
-            self.baud_combo.setEnabled(False)
         else:
-            QMessageBox.critical(self, "Connection Failed", 
-                               f"Failed to connect to LoRa module on {port_name}")
+            QMessageBox.warning(self, "Connection Failed", 
+                             "Failed to connect to video stream.\n\n"
+                             "Make sure:\n"
+                             "1. Pi is running sender.py\n"
+                             "2. Both devices are on the same WiFi network\n"
+                             "3. Pi IP is 192.168.1.200")
     
-    def disconnect_from_lora(self):
-        """Disconnect from LoRa module."""
-        self.lora_comm.disconnect_from_lora()
-        self.lora_comm.quit()
-        self.lora_comm.wait()
+    def disconnect_from_video(self):
+        """Disconnect from video stream."""
+        self.video_receiver.disconnect_from_stream()
+        self.video_receiver.quit()
+        self.video_receiver.wait()
         
         self.connect_btn.setEnabled(True)
         self.disconnect_btn.setEnabled(False)
-        self.port_combo.setEnabled(True)
-        self.baud_combo.setEnabled(True)
+        self.video_label.setText("Video Feed\n(Disconnected)")
+        self.video_label.setStyleSheet("""
+            QLabel { 
+                background-color: #000; 
+                color: #fff; 
+                padding: 50px; 
+                border: 2px solid #333; 
+                border-radius: 10px;
+                min-height: 400px;
+            }
+        """)
+    
+    def update_video_frame(self, pixmap):
+        """Update video label with new frame."""
+        # Scale pixmap to fit label while maintaining aspect ratio
+        scaled_pixmap = pixmap.scaled(
+            self.video_label.size(), 
+            Qt.KeepAspectRatio, 
+            Qt.SmoothTransformation
+        )
+        self.video_label.setPixmap(scaled_pixmap)
     
     def update_connection_status(self, connected):
         """Update connection status display."""
         if connected:
-            self.connection_label.setText("LoRa Status: Connected")
+            self.connection_label.setText("Video: Connected")
             self.connection_label.setStyleSheet("QLabel { color: green; background-color: #e8f5e8; padding: 10px; border-radius: 5px; }")
         else:
-            self.connection_label.setText("LoRa Status: Disconnected")
+            self.connection_label.setText("Video: Disconnected")
             self.connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 10px; border-radius: 5px; }")
-    
-    def handle_telemetry(self, telemetry_data):
-        """Handle telemetry data received from rover."""
-        # Update telemetry display
-        telemetry_text = f"Battery: {telemetry_data.get('battery', 'N/A')}% | "
-        telemetry_text += f"GPS: {telemetry_data.get('gps', 'N/A')} | "
-        telemetry_text += f"Status: {telemetry_data.get('status', 'N/A')}"
-        
-        self.telemetry_label.setText(f"Telemetry: {telemetry_text}")
-        print(f"Received telemetry: {telemetry_data}")
     
     def handle_error(self, error_message):
         """Handle communication errors."""
-        QMessageBox.warning(self, "Communication Error", error_message)
-        print(f"LoRa Error: {error_message}")
+        print(f"Video Error: {error_message}")
+        # Don't show message box for every error to avoid spam
+        # Only show critical errors
+        if "Failed to connect" in error_message:
+            QMessageBox.warning(self, "Connection Error", error_message)
     
     def closeEvent(self, event):
         """Handle application close event."""
-        if self.lora_comm.is_connected:
-            self.disconnect_from_lora()
+        if self.video_receiver.is_connected:
+            self.disconnect_from_video()
         event.accept()
 
 
