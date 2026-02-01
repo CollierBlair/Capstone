@@ -126,7 +126,7 @@ int main(void)
   while (1)
   {
 	 // receive state of WASD keys from serial buffer
-	HAL_UART_Receive(&huart2, keys, 4, 1000);
+	HAL_UART_Receive(&huart2, keys, 4, HAL_MAX_DELAY);
 
 	// 0xA0 indicates pressed key, 0x05 indicates unpressed key
 	if (keys[0] == 0xA0 && keys[2] == 0x05)		// forward
@@ -145,34 +145,52 @@ int main(void)
 		left_pwm = right_pwm = 0;
 	}
 
-	if (keys[1] == 0xA0 && keys[3] == 0x05)		// left
+	if ((keys[0] == 0x05 && keys[2] == 0x05) || (keys[0] == 0xA0 && keys[2] == 0xA0))
 	{
-		// if going forwards, speed up right side and slow down left side
-		if (left_dir == 1 && right_dir == 1)
+		if (keys[1] == 0xA0 && keys[3] == 0x05)			// turn in place left
 		{
-			left_pwm -= 15;
-			right_pwm += 15;
+			left_dir = 0;
+			right_dir = 1;
+			left_pwm = right_pwm = 50;
 		}
-		// if going backwards, speed up left side and slow down right side
-		else if (left_dir == 0 && right_dir == 0)
+		else if (keys[1] == 0x05 && keys[3] == 0xA0)	// turn in place right
 		{
-			left_pwm += 15;
-			right_pwm -= 15;
+			left_dir = 1;
+			right_dir = 0;
+			left_pwm = right_pwm = 50;
 		}
 	}
-	else if (keys[1] == 0x05 && keys[3] == 0xA0) // right
+	else
 	{
-		// if going forwards, speed up left side and slow down right side
-		if (left_dir == 1 && right_dir == 1)
+		if (keys[1] == 0xA0 && keys[3] == 0x05)		// left
 		{
-			left_pwm += 15;
-			right_pwm -= 15;
+			// if going forwards, speed up right side and slow down left side
+			if (left_dir == 1 && right_dir == 1)
+			{
+				left_pwm -= 15;
+				right_pwm += 15;
+			}
+			// if going backwards, speed up left side and slow down right side
+			else if (left_dir == 0 && right_dir == 0)
+			{
+				left_pwm += 15;
+				right_pwm -= 15;
+			}
 		}
-		// if going backwards, speed up right side and slow down left side
-		else if (left_dir == 0 && right_dir == 0)
+		else if (keys[1] == 0x05 && keys[3] == 0xA0) // right
 		{
-			left_pwm -= 15;
-			right_pwm += 15;
+			// if going forwards, speed up left side and slow down right side
+			if (left_dir == 1 && right_dir == 1)
+			{
+				left_pwm += 15;
+				right_pwm -= 15;
+			}
+			// if going backwards, speed up right side and slow down left side
+			else if (left_dir == 0 && right_dir == 0)
+			{
+				left_pwm -= 15;
+				right_pwm += 15;
+			}
 		}
 	}
 

@@ -80,7 +80,6 @@ class RoverControlGUI(QMainWindow):
         main_layout = QHBoxLayout()
         central.setLayout(main_layout)
 
-        # Video Area
         video_layout = QVBoxLayout()
         self.video_label = QLabel("Video Feed\n(Placeholder)")
         self.video_label.setFont(QFont("Arial", 14))
@@ -94,7 +93,6 @@ class RoverControlGUI(QMainWindow):
 
         main_layout.addLayout(video_layout, 3)
 
-        # Controls Panel
         controls_layout = QVBoxLayout()
 
         self.movement_display = QLabel("Movement: None")
@@ -102,7 +100,6 @@ class RoverControlGUI(QMainWindow):
         self.movement_display.setAlignment(Qt.AlignCenter)
         controls_layout.addWidget(self.movement_display)
 
-        # Colored Buttons
         btn_style = """
         QPushButton {
             font-size: 20px;
@@ -114,16 +111,16 @@ class RoverControlGUI(QMainWindow):
         """
 
         self.up_btn = QPushButton("↑")
-        self.up_btn.setStyleSheet(btn_style + "background:#4CAF50;")  # Green
+        self.up_btn.setStyleSheet(btn_style + "background:#4CAF50;")
 
         self.down_btn = QPushButton("↓")
-        self.down_btn.setStyleSheet(btn_style + "background:#f44336;")  # Red
+        self.down_btn.setStyleSheet(btn_style + "background:#f44336;")
 
         self.left_btn = QPushButton("←")
-        self.left_btn.setStyleSheet(btn_style + "background:#2196F3;")  # Blue
+        self.left_btn.setStyleSheet(btn_style + "background:#2196F3;")
 
         self.right_btn = QPushButton("→")
-        self.right_btn.setStyleSheet(btn_style + "background:#FF9800;")  # Orange
+        self.right_btn.setStyleSheet(btn_style + "background:#FF9800;")
 
         for b in [self.up_btn, self.down_btn, self.left_btn, self.right_btn]:
             b.setFixedSize(60, 60)
@@ -141,7 +138,6 @@ class RoverControlGUI(QMainWindow):
         controls_layout.addLayout(top)
         controls_layout.addLayout(bottom)
 
-        # STM32 Settings
         group = QGroupBox("STM32 Settings")
         group_layout = QVBoxLayout()
 
@@ -169,27 +165,29 @@ class RoverControlGUI(QMainWindow):
 
         main_layout.addLayout(controls_layout, 1)
 
-    # ================= KEY EVENTS =================
+    # ================= KEY EVENTS (WASD) =================
     def keyPressEvent(self, e):
         self.pressed_keys.add(e.key())
-        if e.key() == Qt.Key_Up: self.up_btn.setDown(True)
-        if e.key() == Qt.Key_Down: self.down_btn.setDown(True)
-        if e.key() == Qt.Key_Left: self.left_btn.setDown(True)
-        if e.key() == Qt.Key_Right: self.right_btn.setDown(True)
+
+        if e.key() == Qt.Key_W: self.up_btn.setDown(True)
+        if e.key() == Qt.Key_S: self.down_btn.setDown(True)
+        if e.key() == Qt.Key_A: self.left_btn.setDown(True)
+        if e.key() == Qt.Key_D: self.right_btn.setDown(True)
 
     def keyReleaseEvent(self, e):
         self.pressed_keys.discard(e.key())
-        if e.key() == Qt.Key_Up: self.up_btn.setDown(False)
-        if e.key() == Qt.Key_Down: self.down_btn.setDown(False)
-        if e.key() == Qt.Key_Left: self.left_btn.setDown(False)
-        if e.key() == Qt.Key_Right: self.right_btn.setDown(False)
+
+        if e.key() == Qt.Key_W: self.up_btn.setDown(False)
+        if e.key() == Qt.Key_S: self.down_btn.setDown(False)
+        if e.key() == Qt.Key_A: self.left_btn.setDown(False)
+        if e.key() == Qt.Key_D: self.right_btn.setDown(False)
 
     # TRANSMIT LOOP
     def handle_continuous_keys(self):
-        up    = 0xA0 if Qt.Key_Up    in self.pressed_keys else 0x05
-        left  = 0xA0 if Qt.Key_Left  in self.pressed_keys else 0x05
-        down  = 0xA0 if Qt.Key_Down  in self.pressed_keys else 0x05
-        right = 0xA0 if Qt.Key_Right in self.pressed_keys else 0x05
+        up    = 0xA0 if Qt.Key_W in self.pressed_keys else 0x05
+        left  = 0xA0 if Qt.Key_A in self.pressed_keys else 0x05
+        down  = 0xA0 if Qt.Key_S in self.pressed_keys else 0x05
+        right = 0xA0 if Qt.Key_D in self.pressed_keys else 0x05
 
         if self.stm32_comm.is_connected:
             self.stm32_comm.send_key_state(up, left, down, right)
