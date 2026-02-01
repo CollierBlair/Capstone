@@ -37,7 +37,7 @@
 #define FXOSC		32000000
 #define BITRATE		9600
 
-#define RFM_RST		GPIO_PIN_0
+#define RFM_RST		GPIO_PIN_8
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -89,7 +89,7 @@ int main(void)
 
   /* USER CODE BEGIN Init */
 
-  // PC4 (A3) --> SS
+  // PA8 (D9) --> SS
   // PA5 (A4) --> SCK
   // PA6 (A5) --> MISO
   // PA7 (A6) --> MOSI
@@ -114,7 +114,10 @@ int main(void)
   rfm_config();
 
 
-  uint8_t ser_buff = 0x55;
+  uint8_t keys[4];				// [up, left, down, right]
+
+  uint8_t left_dir, right_dir;  // 0 - backwards, 1 - forwards
+  uint8_t left_pwm, right_pwm;	// (0, 100)
 
   /* USER CODE END 2 */
 
@@ -122,13 +125,70 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	 // receive 1 byte from serial buffer for motor control
-//	HAL_UART_Receive(&huart2, &ser_buff, 1, 1000);
+	 // receive state of WASD keys from serial buffer
+	HAL_UART_Receive(&huart2, keys, 4, 1000);
 
-	// send data byte over radio to receiver
-	rfm_send(&ser_buff, 1);
-	HAL_Delay(2000);
+	// 0xA0 indicates pressed key, 0x05 indicates unpressed key
+	if (keys[0] == 0xA0 && keys[2] == 0x05)		// forward
+	{
+		left_dir = right_dir = 1;
+		left_pwm = right_pwm = 75;
+	}
+	else if (keys[0] == 0x05 && keys[2] == 0xA0)	// backward
+	{
+		left_dir = right_dir = 0;
+		left_pwm = right_pwm = 75;
+	}
+	else										// stop
+	{
+		left_dir = right_dir = 0;
+		left_pwm = right_pwm = 0;
+	}
 
+	if (keys[1] == 0xA0 && keys[3] == 0x05)		// left
+	{
+		// if going forwards, speed up right side and slow down left side
+		if (left_dir == 1 && right_dir == 1)
+		{
+			left_pwm -= 15;
+			right_pwm += 15;
+		}
+		// if going backwards, speed up left side and slow down right side
+		else if (left_dir == 0 && right_dir == 0)
+		{
+			left_pwm += 15;
+			right_pwm -= 15;
+		}
+	}
+	else if (keys[1] == 0x05 && keys[3] == 0xA0) // right
+	{
+		// if going forwards, speed up left side and slow down right side
+		if (left_dir == 1 && right_dir == 1)
+		{
+			left_pwm += 15;
+			right_pwm -= 15;
+		}
+		// if going backwards, speed up right side and slow down left side
+		else if (left_dir == 0 && right_dir == 0)
+		{
+			left_pwm -= 15;
+			right_pwm += 15;
+		}
+	}
+
+	if (left_pwm > 100)
+		left_pwm = 100;
+	if (right_pwm > 100)
+		right_pwm = 100;
+
+	// radio packet structure is
+	//
+	// [left motor direction, left motor pwm, right motor direction, right motor pwm]
+	//
+	uint8_t motors[4] = {left_dir, left_pwm, right_dir, right_pwm};
+
+	// send data over radio to receiver
+	rfm_send(motors, 4);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -228,12 +288,12 @@ void rfm_config()
 
 	// Packet Configuration settings
 	// Fixed length packets
-	// CRC off
+	// CRC on
 	// No address filtering
-	rfm_write_reg(0x37, 0x00);
+	rfm_write_reg(0x37, 0x10);
 
-	// Payload length: 1 byte
-	rfm_write_reg(0x38, 1);
+	// Payload length: 4 bytes
+	rfm_write_reg(0x38, 4);
 
 	// Set FIFO threshold, TX will start when FIFO is not empty
 	rfm_write_reg(0x3C, 0x8F);

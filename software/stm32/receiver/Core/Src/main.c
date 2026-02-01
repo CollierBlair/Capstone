@@ -37,7 +37,8 @@
 #define FXOSC		32000000
 #define BITRATE		9600
 
-#define RFM_RST		GPIO_PIN_3
+#define RFM_CS		GPIO_PIN_4
+#define RFM_RST		GPIO_PIN_8
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -64,14 +65,17 @@ uint8_t rfm_read_reg(uint8_t addr);
 uint8_t rfm_check_reg(uint8_t addr, uint8_t byte);
 
 uint8_t rfm_read_rssi();
-void rfm_read_fifo(uint8_t len, uint8_t * data);
-void rfm_wait_payload_ready();
+void rfm_read_fifo(uint8_t * data, uint8_t len);
+void rfm_wait_packet_received();
 
 // TIM2CH0	PA0 (A0)
 // TIM2CH1 	PA1 (A1)
+// TIM2CH2 	PA2 (A7)
+// TIM2CH4 	PA3 (A2)
+
 // 50kHz frequency output
-void motor_left_set_duty(uint16_t duty);
-void motor_right_set_duty(uint16_t duty);
+void motor_left_set_duty(uint8_t dir, uint8_t duty);
+void motor_right_set_duty(uint8_t dir, uint8_t duty);
 
 /* USER CODE END PFP */
 
@@ -119,27 +123,22 @@ int main(void)
 
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_3);
+  HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_4);
   /* USER CODE END 2 */
-
-  uint8_t version = rfm_read_reg(0x10);
-
-  version = 0;
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	// when FIFO contains at least one byte, receive data
 
-	rfm_wait_payload_ready();
+	// wait until data is received...
+	uint8_t motors[4];
+	rfm_wait_packet_received();
+	rfm_read_fifo(motors, 4);
 
-	while (rfm_read_reg(0x28) & 0x40)
-	{
-		(void)rfm_read_reg(0x00);
-	}
-
-//	  rfm_read_rssi();
-//	  HAL_Delay(50);
+	motor_left_set_duty(motors[0], motors[1]);
+	motor_right_set_duty(motors[2], motors[3]);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -218,11 +217,10 @@ void rfm_config()
 	rfm_write_reg(0x08, 0xC0);
 	rfm_write_reg(0x09, 0x00);
 
-	// standard AFC routine
-//	rfm_write_reg(0x0B, 0x00);
+	// Improved AFC routine
 	rfm_write_reg(0x0B, 0x20);
 
-	// enable overcurrent protection and disable high power
+	// enable overcurrent protection and disable high power (receive only)
 	rfm_write_reg(0x13, 0x1A);
 	rfm_write_reg(0x5A, 0x55);
 	rfm_write_reg(0x5C, 0x70);
@@ -231,12 +229,7 @@ void rfm_config()
 	rfm_write_reg(0x18, 0x80);
 
 	// set RX bandwidth to 41.7kHz
-//	rfm_write_reg(0x19, 0x33);
-	rfm_write_reg(0x19, 0b01010101);
-	rfm_write_reg(0x19, 0b01010101);
-
-	// set AFC bandwidth with same parameters
-//	rfm_write_reg(0x1A, 0x33);
+	rfm_write_reg(0x19, 0x55);
 
 	// AFC performed every time RX mode is entered
 	rfm_write_reg(0x1E, 0x04);
@@ -257,14 +250,14 @@ void rfm_config()
 
 	// Packet Configuration settings
 	// Fixed length packets
-	// CRC off
+	// CRC on
 	// No address filtering
-	rfm_write_reg(0x37, 0x00);
+	rfm_write_reg(0x37, 0x10);
 
-	// Payload length: 1 byte
-	rfm_write_reg(0x38, 1);
+	// Payload length: 4 bytes
+	rfm_write_reg(0x38, 4);
 
-	// Set FIFO threshold, TX will start when FIFO is not empty
+	// Set FIFO threshold
 	rfm_write_reg(0x3C, 0x8F);
 
 	// automatically restart receiver after receiving packet
@@ -273,7 +266,7 @@ void rfm_config()
 	// clear out garbage from FIFO
 	while (rfm_read_reg(0x28) & 0x40)
 	{
-		rfm_read_reg(0x00);
+		(void)rfm_read_reg(0x00);
 	}
 
 	// Switch to Receive Mode: 100
@@ -285,12 +278,12 @@ void rfm_config()
 
 void rfm_select()
 {
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(GPIOA, RFM_CS, GPIO_PIN_RESET);
 }
 
 void rfm_deselect()
 {
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(GPIOA, RFM_CS, GPIO_PIN_SET);
 }
 
 void rfm_reset()
@@ -342,8 +335,9 @@ uint8_t rfm_read_rssi()
 	return rfm_read_reg(0x24);
 }
 
-void rfm_read_fifo(uint8_t len, uint8_t * data)
+void rfm_read_fifo(uint8_t * data, uint8_t len)
 {
+	// read from FIFO the expected number of bytes
 	uint8_t rcv_buff[len+1];
 	uint8_t send_buff[len+1];
 
@@ -363,21 +357,45 @@ void rfm_read_fifo(uint8_t len, uint8_t * data)
 
 }
 
-void rfm_wait_payload_ready()
+void rfm_wait_packet_received()
 {
-	while (!(rfm_read_reg(0x28) & 0x04));
+	while (!(rfm_read_reg(0x28) & 0x04));		// wait until PayloadReady flag is set
 }
 
-void motor_right_set_duty(uint16_t duty)
+void motor_left_set_duty(uint8_t dir, uint8_t duty)
 {
-	if (duty > 320)		duty = 320;
-	TIM2->CCR1 = duty;
+	if (duty > 100)		duty = 100;
+
+	uint16_t ccr = (uint16_t) (((float) duty / 100.0) * 320.0);
+
+	if (dir == 1)
+	{
+		TIM2->CCR1 = 0;
+		TIM2->CCR2 = ccr;
+	}
+	else
+	{
+		TIM2->CCR1 = ccr;
+		TIM2->CCR2 = 0;
+	}
 }
 
-void motor_left_set_duty(uint16_t duty)
+void motor_right_set_duty(uint8_t dir, uint8_t duty)
 {
-	if (duty > 320)		duty = 320;
-	TIM2->CCR2 = duty;
+	if (duty > 100)		duty = 100;
+
+	uint16_t ccr = (uint16_t) (((float) duty / 100.0) * 320.0);
+
+	if (dir == 1)
+	{
+		TIM2->CCR3 = 0;
+		TIM2->CCR4 = ccr;
+	}
+	else
+	{
+		TIM2->CCR3 = ccr;
+		TIM2->CCR4 = 0;
+	}
 }
 /* USER CODE END 4 */
 
