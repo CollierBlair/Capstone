@@ -39,6 +39,8 @@
 
 #define RFM_CS		GPIO_PIN_4
 #define RFM_RST		GPIO_PIN_8
+
+#define TIM2_ARR	999
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -366,7 +368,7 @@ void motor_left_set_duty(uint8_t dir, uint8_t duty)
 {
 	if (duty > 100)		duty = 100;
 
-	uint16_t ccr = (uint16_t) (((float) duty / 100.0) * 320.0);
+	uint16_t ccr = (uint16_t) (((float) duty / 100.0) * TIM2_ARR);
 
 	if (dir == 1)
 	{
@@ -384,7 +386,7 @@ void motor_right_set_duty(uint8_t dir, uint8_t duty)
 {
 	if (duty > 100)		duty = 100;
 
-	uint16_t ccr = (uint16_t) (((float) duty / 100.0) * 320.0);
+	uint16_t ccr = (uint16_t) (((float) duty / 100.0) * TIM2_ARR);
 
 	if (dir == 1)
 	{
