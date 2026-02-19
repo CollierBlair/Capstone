@@ -114,7 +114,7 @@ int main(void)
   rfm_config();
 
 
-  uint8_t keys[4];				// [up, left, down, right]
+  uint8_t keys[4] = {0xa0, 0xa0, 0x95, 0x05};				// [up, left, down, right]
 
   uint8_t left_dir, right_dir;  // 0 - backwards, 1 - forwards
   uint8_t left_pwm, right_pwm;	// (0, 100)
@@ -127,6 +127,7 @@ int main(void)
   {
 	 // receive state of WASD keys from serial buffer
 	HAL_UART_Receive(&huart2, keys, 4, HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, keys, 4, HAL_MAX_DELAY);
 
 	// 0xA0 indicates pressed key, 0x05 indicates unpressed key
 	if (keys[0] == 0xA0 && keys[2] == 0x05)		// forward
@@ -203,7 +204,7 @@ int main(void)
 	//
 	// [left motor direction, left motor pwm, right motor direction, right motor pwm]
 	//
-	uint8_t motors[4] = {left_dir, left_pwm, right_dir, right_pwm};
+	uint8_t motors[4] = {left_pwm, right_pwm, left_dir, right_dir};
 
 	// send data over radio to receiver
 	rfm_send(motors, 4);

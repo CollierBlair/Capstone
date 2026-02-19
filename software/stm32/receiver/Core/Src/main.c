@@ -139,8 +139,8 @@ int main(void)
 	rfm_wait_packet_received();
 	rfm_read_fifo(motors, 4);
 
-	motor_left_set_duty(motors[0], motors[1]);
-	motor_right_set_duty(motors[2], motors[3]);
+	motor_left_set_duty(motors[2], motors[0]);
+	motor_right_set_duty(motors[3], motors[1]);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
