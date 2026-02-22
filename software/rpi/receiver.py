@@ -3,7 +3,7 @@ import urllib.request
 import numpy as np
 
 # URL of Pi camera stream
-url = "http://192.168.1.200:5000/video"
+url = "http://100.70.10.53:5000/video"
 
 # Open a connection to the MJPEG stream
 stream = urllib.request.urlopen(url)
