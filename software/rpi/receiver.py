@@ -5,12 +5,19 @@ import numpy as np
 # URL of Pi stream
 url = "http://100.70.10.57:5000/video"
 
+# Open connection to the MJPEG stream
 stream = urllib.request.urlopen(url)
 bytes_data = b''
 
+# Known widths of the sender frames
+RGB_WIDTH = 640
+THERMAL_WIDTH = 320
+
 while True:
+    # Read a chunk of the stream
     bytes_data += stream.read(4096)
 
+    # Look for JPEG start and end markers
     a = bytes_data.find(b'\xff\xd8')
     b = bytes_data.find(b'\xff\xd9')
 
@@ -23,13 +30,14 @@ while True:
         if frame is not None:
             h, w, _ = frame.shape
 
-            # Split frame (left = RGB, right = thermal)
-            rgb_frame = frame[:, :w//2]
-            thermal_frame = frame[:, w//2:]
+            # Split frame into RGB and thermal using correct widths
+            rgb_frame = frame[:, :RGB_WIDTH]
+            thermal_frame = frame[:, RGB_WIDTH:RGB_WIDTH + THERMAL_WIDTH]
 
             cv2.imshow('RGB Camera', rgb_frame)
             cv2.imshow('Thermal Camera', thermal_frame)
 
+    # Press 'q' to quit
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
