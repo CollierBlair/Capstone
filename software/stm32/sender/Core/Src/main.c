@@ -133,12 +133,12 @@ int main(void)
 	if (keys[0] == 0xA0 && keys[2] == 0x05)		// forward
 	{
 		left_dir = right_dir = 1;
-		left_pwm = right_pwm = 75;
+		left_pwm = right_pwm = 80;
 	}
 	else if (keys[0] == 0x05 && keys[2] == 0xA0)	// backward
 	{
 		left_dir = right_dir = 0;
-		left_pwm = right_pwm = 75;
+		left_pwm = right_pwm = 80;
 	}
 	else										// stop
 	{
@@ -152,13 +152,13 @@ int main(void)
 		{
 			left_dir = 0;
 			right_dir = 1;
-			left_pwm = right_pwm = 50;
+			left_pwm = right_pwm = 60;
 		}
 		else if (keys[1] == 0x05 && keys[3] == 0xA0)	// turn in place right
 		{
 			left_dir = 1;
 			right_dir = 0;
-			left_pwm = right_pwm = 50;
+			left_pwm = right_pwm = 60;
 		}
 	}
 	else
