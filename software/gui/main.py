@@ -88,7 +88,7 @@ class VideoReceiver(QThread):
     connection_status_changed = pyqtSignal(bool)
     error_occurred = pyqtSignal(str)
     
-    def __init__(self, video_url="http://192.168.1.200:5000/video"):
+    def __init__(self, video_url="http://100.70.10.53:5000/video"):
         super().__init__()
         self.video_url = video_url
         self.is_connected = False
