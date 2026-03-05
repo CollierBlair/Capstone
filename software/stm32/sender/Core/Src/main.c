@@ -38,6 +38,13 @@
 #define BITRATE		9600
 
 #define RFM_RST		GPIO_PIN_8
+
+#define BASE_PWM		70		// default forward/backward duty cycle
+#define RAMP_MIN		50		// minimum speed when decelerating with Ctrl
+#define RAMP_MAX		100		// maximum ramp duty cycle
+#define RAMP_STEP		5		// duty cycle step per packet when shift held
+#define TURN_OFFSET		10		// differential added/subtracted during moving turns
+#define INPLACE_PWM		55		// duty cycle for in-place turns
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -113,11 +120,15 @@ int main(void)
 
   rfm_config();
 
+  // GUI must send 6 bytes per packet:
+  // [W, A, S, D, Shift, Ctrl]  (0xA0 = pressed, 0x05 = unpressed)
+  uint8_t keys[6];			// [up, left, down, right, shift, ctrl]
 
-  uint8_t keys[4] = {0xa0, 0xa0, 0x95, 0x05};				// [up, left, down, right]
-
-  uint8_t left_dir, right_dir;  // 0 - backwards, 1 - forwards
+  uint8_t left_dir, right_dir;	// 0 - backwards, 1 - forwards
   uint8_t left_pwm, right_pwm;	// (0, 100)
+
+  // Ramp state — persists across loop iterations
+  uint8_t ramp_pwm = BASE_PWM;	// current speed level, climbs when shift held
 
   /* USER CODE END 2 */
 
@@ -125,88 +136,152 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	 // receive state of WASD keys from serial buffer
-	HAL_UART_Receive(&huart2, keys, 4, HAL_MAX_DELAY);
-	HAL_UART_Transmit(&huart2, keys, 4, HAL_MAX_DELAY);
+	// Receive state of WASD + Shift keys from serial buffer
+	// GUI must send exactly 5 bytes per update cycle
+	HAL_UART_Receive(&huart2, keys, 6, HAL_MAX_DELAY);
+
+	uint8_t w     = keys[0];
+	uint8_t a     = keys[1];
+	uint8_t s     = keys[2];
+	uint8_t d     = keys[3];
+	uint8_t shift = keys[4];
+	uint8_t ctrl  = keys[5];
 
 	// 0xA0 indicates pressed key, 0x05 indicates unpressed key
-	if (keys[0] == 0xA0 && keys[2] == 0x05)		// forward
+
+	// ----------------------------------------------------------------
+	// Determine base direction and starting PWM
+	// ----------------------------------------------------------------
+	uint8_t moving_forward  = (w == 0xA0 && s == 0x05);
+	uint8_t moving_backward = (w == 0x05 && s == 0xA0);
+	uint8_t moving          = moving_forward || moving_backward;
+
+	if (moving_forward)
 	{
 		left_dir = right_dir = 1;
-		left_pwm = right_pwm = 80;
 	}
-	else if (keys[0] == 0x05 && keys[2] == 0xA0)	// backward
+	else if (moving_backward)
 	{
 		left_dir = right_dir = 0;
-		left_pwm = right_pwm = 80;
 	}
-	else										// stop
+	else
 	{
 		left_dir = right_dir = 0;
+	}
+
+	// ----------------------------------------------------------------
+	// Speed ramp: only active while Shift is held during forward/backward
+	// Resets to BASE_PWM when Shift is released or no W/S input
+	// ----------------------------------------------------------------
+	// Ramp behavior:
+	//   W/S alone        -> hold ramp_pwm at current value (BASE_PWM on first press)
+	//   W/S + Shift      -> accelerate up to RAMP_MAX, held on Shift release
+	//   W/S + Ctrl       -> decelerate down to RAMP_MIN, held on Ctrl release
+	//   Release W/S      -> reset ramp_pwm to BASE_PWM for next press
+	if (!moving)
+	{
+		// Not moving — reset so next W/S press starts fresh at BASE_PWM
+		ramp_pwm = BASE_PWM;
+	}
+	else if (shift == 0xA0)
+	{
+		// Accelerate
+		ramp_pwm += RAMP_STEP;
+		if (ramp_pwm > RAMP_MAX)
+			ramp_pwm = RAMP_MAX;
+	}
+	else if (ctrl == 0xA0)
+	{
+		// Decelerate
+		if (ramp_pwm > RAMP_MIN + RAMP_STEP)
+			ramp_pwm -= RAMP_STEP;
+		else
+			ramp_pwm = RAMP_MIN;
+	}
+	// else: W/S held, no modifier — hold ramp_pwm as-is
+
+	if (moving)
+	{
+		left_pwm = right_pwm = ramp_pwm;
+	}
+	else
+	{
 		left_pwm = right_pwm = 0;
 	}
 
-	if ((keys[0] == 0x05 && keys[2] == 0x05) || (keys[0] == 0xA0 && keys[2] == 0xA0))
+	// ----------------------------------------------------------------
+	// Steering logic
+	// ----------------------------------------------------------------
+	uint8_t no_vertical   = (w == 0x05 && s == 0x05);
+	uint8_t both_vertical = (w == 0xA0 && s == 0xA0);
+
+	if (no_vertical || both_vertical)
 	{
-		if (keys[1] == 0xA0 && keys[3] == 0x05)			// turn in place left
+		// In-place turns: ignore ramp, use fixed INPLACE_PWM
+		if (a == 0xA0 && d == 0x05)		// turn in place left
 		{
-			left_dir = 0;
+			left_dir  = 0;
 			right_dir = 1;
-			left_pwm = right_pwm = 60;
+			left_pwm  = right_pwm = INPLACE_PWM;
 		}
-		else if (keys[1] == 0x05 && keys[3] == 0xA0)	// turn in place right
+		else if (a == 0x05 && d == 0xA0)	// turn in place right
 		{
-			left_dir = 1;
+			left_dir  = 1;
 			right_dir = 0;
-			left_pwm = right_pwm = 60;
+			left_pwm  = right_pwm = INPLACE_PWM;
 		}
 	}
 	else
 	{
-		if (keys[1] == 0xA0 && keys[3] == 0x05)		// left
+		// Moving turns: apply differential to current ramp speed.
+		// Outer wheel capped at RAMP_MAX (100), inner at BASE_PWM (70).
+		if (a == 0xA0 && d == 0x05)		// steer left
 		{
-			// if going forwards, speed up right side and slow down left side
-			if (left_dir == 1 && right_dir == 1)
+			if (moving_forward)
 			{
-				left_pwm -= 15;
-				right_pwm += 15;
+				// Speed up right (outer), slow down left (inner)
+				right_pwm = ramp_pwm + TURN_OFFSET;
+				left_pwm  = ramp_pwm - TURN_OFFSET;
 			}
-			// if going backwards, speed up left side and slow down right side
-			else if (left_dir == 0 && right_dir == 0)
+			else if (moving_backward)
 			{
-				left_pwm += 15;
-				right_pwm -= 15;
+				// Speed up left (outer going back), slow down right
+				left_pwm  = ramp_pwm + TURN_OFFSET;
+				right_pwm = ramp_pwm - TURN_OFFSET;
 			}
 		}
-		else if (keys[1] == 0x05 && keys[3] == 0xA0) // right
+		else if (a == 0x05 && d == 0xA0)	// steer right
 		{
-			// if going forwards, speed up left side and slow down right side
-			if (left_dir == 1 && right_dir == 1)
+			if (moving_forward)
 			{
-				left_pwm += 15;
-				right_pwm -= 15;
+				// Speed up left (outer), slow down right (inner)
+				left_pwm  = ramp_pwm + TURN_OFFSET;
+				right_pwm = ramp_pwm - TURN_OFFSET;
 			}
-			// if going backwards, speed up right side and slow down left side
-			else if (left_dir == 0 && right_dir == 0)
+			else if (moving_backward)
 			{
-				left_pwm -= 15;
-				right_pwm += 15;
+				// Speed up right (outer going back), slow down left
+				right_pwm = ramp_pwm + TURN_OFFSET;
+				left_pwm  = ramp_pwm - TURN_OFFSET;
 			}
 		}
 	}
 
-	if (left_pwm > 100)
-		left_pwm = 100;
-	if (right_pwm > 100)
-		right_pwm = 100;
+	// ----------------------------------------------------------------
+	// Clamp PWM values to valid range [0, 100]
+	// Outer wheel max is RAMP_MAX (100), inner max is BASE_PWM (70)
+	// as specified — use unsigned arithmetic guard for underflow too
+	// ----------------------------------------------------------------
+	if (left_pwm  > RAMP_MAX) left_pwm  = RAMP_MAX;
+	if (right_pwm > RAMP_MAX) right_pwm = RAMP_MAX;
 
 	// radio packet structure is
 	//
 	// [left motor direction, left motor pwm, right motor direction, right motor pwm]
 	//
-	uint8_t motors[4] = {left_pwm, right_pwm, left_dir, right_dir};
+	uint8_t motors[4] = {left_dir, left_pwm, right_dir, right_pwm};
 
-	// send data over radio to receiver
+	// Send data over radio to receiver
 	rfm_send(motors, 4);
     /* USER CODE END WHILE */
 
