@@ -38,7 +38,7 @@ class STM32Communicator(QThread):
         try:
             self.serial_connection = serial.Serial(port=port_name, baudrate=baud_rate, timeout=1)
             # Verify we can actually write (catches virtual/ghost ports that open but don't work)
-            self.serial_connection.write(bytes([0x05, 0x05, 0x05, 0x05]))
+            self.serial_connection.write(bytes([0x05, 0x05, 0x05, 0x05, 0x05, 0x05]))
             self.is_connected = True
             self.connection_status_changed.emit(True)
             return True
@@ -61,11 +61,11 @@ class STM32Communicator(QThread):
         self.is_connected = False
         self.connection_status_changed.emit(False)
 
-    def send_key_state(self, up, left, down, right):
+    def send_key_state(self, up, left, down, right, accelerate, decelerate):
         if not self.is_connected or not self.serial_connection:
             return
         try:
-            self.serial_connection.write(bytes([up, left, down, right]))
+            self.serial_connection.write(bytes([up, left, down, right, accelerate, decelerate]))
             self.serial_connection.flush()  # like test_ser.py - send immediately
         except Exception as e:
             self.error_occurred.emit(str(e))
@@ -305,7 +305,7 @@ class RoverControlGUI(QMainWindow):
         controls_layout.addWidget(self.movement_display)
         
         # Control instructions
-        instructions = QLabel("Controls: Arrow keys or W A S D")
+        instructions = QLabel("Controls: Arrow keys or W A S D. Q = accelerate, E = decelerate")
         instructions.setFont(QFont("Arial", 9))
         instructions.setAlignment(Qt.AlignCenter)
         instructions.setStyleSheet("QLabel { color: #666; margin: 5px; }")
@@ -449,6 +449,10 @@ class RoverControlGUI(QMainWindow):
         return Qt.Key_Left in self.pressed_keys or Qt.Key_A in self.pressed_keys
     def _right_pressed(self):
         return Qt.Key_Right in self.pressed_keys or Qt.Key_D in self.pressed_keys
+    def _q_pressed(self):
+        return Qt.Key_Q in self.pressed_keys
+    def _e_pressed(self):
+        return Qt.Key_E in self.pressed_keys
 
     def keyPressEvent(self, event):
         """Handle key press events (Arrow keys and WASD)."""
@@ -496,13 +500,16 @@ class RoverControlGUI(QMainWindow):
             self.handle_movement("Left")
         elif self._right_pressed():
             self.handle_movement("Right")
-        # STM32 protocol: 4 bytes [up, left, down, right], 0xA0 = pressed, 0x05 = released
+        # STM32 protocol: 6 bytes [W, A, S, D, Q, E], 0xA0 = pressed, 0x05 = released
+        # Q = accelerate, E = decelerate (while moving with W/S)
         if self.stm32_comm.is_connected:
             up    = 0xA0 if self._up_pressed()    else 0x05
             left  = 0xA0 if self._left_pressed()  else 0x05
             down  = 0xA0 if self._down_pressed()  else 0x05
             right = 0xA0 if self._right_pressed() else 0x05
-            self.stm32_comm.send_key_state(up, left, down, right)
+            accel = 0xA0 if self._q_pressed()     else 0x05
+            decel = 0xA0 if self._e_pressed()     else 0x05
+            self.stm32_comm.send_key_state(up, left, down, right, accel, decel)
     
     def handle_movement(self, direction):
         """Handle movement commands."""
