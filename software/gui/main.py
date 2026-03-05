@@ -66,6 +66,7 @@ class STM32Communicator(QThread):
             return
         try:
             self.serial_connection.write(bytes([up, left, down, right]))
+            self.serial_connection.flush()  # like test_ser.py - send immediately
         except Exception as e:
             self.error_occurred.emit(str(e))
 
@@ -368,6 +369,7 @@ class RoverControlGUI(QMainWindow):
         baud_row.addWidget(QLabel("Baud:"))
         self.baud_combo = QComboBox()
         self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
+        self.baud_combo.setCurrentText("115200")  # match test_ser.py and sender
         baud_row.addWidget(self.baud_combo)
         stm32_layout.addLayout(baud_row)
         self.stm32_connect_btn = QPushButton("Connect STM32")
