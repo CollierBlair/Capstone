@@ -15,7 +15,7 @@ mlx = adafruit_mlx90640.MLX90640(i2c)
 mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_2_HZ
 
 thermal_raw = np.zeros((24*32,))
-latest_thermal_img = np.zeros((480, 320, 3), dtype=np.uint8)
+latest_thermal_img = np.zeros((240, 320, 3), dtype=np.uint8)
 
 def generate_frames():
     global latest_thermal_img
@@ -33,7 +33,7 @@ def generate_frames():
                 norm = ((data - min_temp) / (max_temp - min_temp) * 255).astype(np.uint8)
 
             # Resize and apply colormap
-            resized = cv2.resize(norm, (320, 480), interpolation=cv2.INTER_CUBIC)
+            resized = cv2.resize(norm, (320, 240), interpolation=cv2.INTER_CUBIC)
             heatmap = cv2.applyColorMap(resized, cv2.COLORMAP_JET)
             latest_thermal_img = heatmap.copy()
 

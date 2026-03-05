@@ -19,7 +19,7 @@ import serial
 import serial.tools.list_ports
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QLabel, QPushButton, QComboBox, QGroupBox, 
-                            QMessageBox)
+                            QMessageBox, QFrame, QDesktopWidget, QSizePolicy)
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QImage, QPixmap
 
@@ -188,13 +188,28 @@ class RoverControlGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Thermal Rover Control v1.0")
-        self.setGeometry(100, 100, 900, 700)
+        # Size window to fit available screen (works on any laptop)
+        desktop = QDesktopWidget()
+        available = desktop.availableGeometry()
+        margin = 20
+        self.setGeometry(
+            available.x() + margin,
+            available.y() + margin,
+            available.width() - 2 * margin,
+            available.height() - 2 * margin
+        )
         
-        # Initialize video receiver
-        self.video_receiver = VideoReceiver()
+        # Initialize video receiver (port 5000)
+        self.video_receiver = VideoReceiver(video_url="http://100.70.10.57:5000/video")
         self.video_receiver.frame_ready.connect(self.update_video_frame)
         self.video_receiver.connection_status_changed.connect(self.update_connection_status)
         self.video_receiver.error_occurred.connect(self.handle_error)
+
+        # Initialize thermal receiver (port 5001)
+        self.thermal_receiver = VideoReceiver(video_url="http://100.70.10.57:5001/thermal")
+        self.thermal_receiver.frame_ready.connect(self.update_thermal_frame)
+        self.thermal_receiver.connection_status_changed.connect(self.update_thermal_connection_status)
+        self.thermal_receiver.error_occurred.connect(self.handle_thermal_error)
 
         # Initialize STM32 serial communicator
         self.stm32_comm = STM32Communicator()
@@ -224,29 +239,45 @@ class RoverControlGUI(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Create main layout - horizontal split
+        # Create main layout - controls have fixed width so they're never pushed off screen
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # Left side - Video feed area (takes up most space)
-        video_layout = QVBoxLayout()
-        
-        # Video feed display
-        self.video_label = QLabel("Connecting to video stream...")
-        self.video_label.setFont(QFont("Arial", 14))
+        # Left side - Video feeds stack: top = regular, bottom = thermal (both auto-fill)
+        video_container = QWidget()
+        video_layout = QVBoxLayout(video_container)
+        video_layout.setContentsMargins(0, 0, 0, 0)
+        video_layout.setSpacing(5)
+
+        # Feeds side by side
+        feeds_layout = QHBoxLayout()
+        feeds_layout.setSpacing(5)
+
+        # Regular video feed (port 5000) - left
+        self.video_label = QLabel("Connecting...")
+        self.video_label.setFont(QFont("Arial", 12))
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("""
-            QLabel { 
-                background-color: #000; 
-                color: #fff; 
-                padding: 50px; 
-                border: 2px solid #333; 
-                border-radius: 10px;
-                min-height: 400px;
-            }
+            QLabel { background-color: #000; color: #fff; padding: 4px;
+                     border: 2px solid #333; border-radius: 8px; }
         """)
-        self.video_label.setScaledContents(True)  # Scale video to fit label
-        video_layout.addWidget(self.video_label)
+        self.video_label.setScaledContents(True)
+        self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        feeds_layout.addWidget(self.video_label, 1)
+
+        # Thermal video feed (port 5001) - right
+        self.thermal_label = QLabel("Thermal: Off")
+        self.thermal_label.setFont(QFont("Arial", 12))
+        self.thermal_label.setAlignment(Qt.AlignCenter)
+        self.thermal_label.setStyleSheet("""
+            QLabel { background-color: #1a1a1a; color: #ff9800; padding: 4px;
+                     border: 2px solid #333; border-radius: 8px; }
+        """)
+        self.thermal_label.setScaledContents(True)
+        self.thermal_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        feeds_layout.addWidget(self.thermal_label, 1)
+
+        video_layout.addLayout(feeds_layout, 1)
         
         # Status display for video area
         self.status_label = QLabel("Status: Ready - Use Arrow Keys to Control")
@@ -254,12 +285,11 @@ class RoverControlGUI(QMainWindow):
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setStyleSheet("QLabel { background-color: #e0e0e0; padding: 10px; border-radius: 5px; }")
         video_layout.addWidget(self.status_label)
-        
-        # Add video layout to main layout (takes up most space)
-        main_layout.addLayout(video_layout, 3)  # 3/4 of the space
-        
-        # Right side - Controls panel (bottom right area)
-        controls_layout = QVBoxLayout()
+
+        # Right side - Controls panel (fixed width so always visible, even in fullscreen)
+        controls_container = QFrame()
+        controls_container.setFixedWidth(320)
+        controls_layout = QVBoxLayout(controls_container)
         
         # Title
         title_label = QLabel("Thermal Rover Control")
@@ -332,29 +362,47 @@ class RoverControlGUI(QMainWindow):
         
         # Video Connection Settings
         video_group = QGroupBox("Video Stream")
-        video_layout = QVBoxLayout()
+        video_group_layout = QVBoxLayout()
         
-        # Connect/Disconnect buttons
+        # Regular video (port 5000) - Connect/Disconnect
         self.connect_btn = QPushButton("Connect to Video")
         self.connect_btn.clicked.connect(self.connect_to_video)
         self.connect_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; padding: 6px; }")
-        video_layout.addWidget(self.connect_btn)
+        video_group_layout.addWidget(self.connect_btn)
         
-        self.disconnect_btn = QPushButton("Disconnect")
+        self.disconnect_btn = QPushButton("Disconnect Video")
         self.disconnect_btn.clicked.connect(self.disconnect_from_video)
         self.disconnect_btn.setEnabled(False)
         self.disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 6px; }")
-        video_layout.addWidget(self.disconnect_btn)
+        video_group_layout.addWidget(self.disconnect_btn)
         
-        video_group.setLayout(video_layout)
+        # Thermal feed (port 5001) - Connect/Disconnect
+        self.thermal_connect_btn = QPushButton("Connect to Thermal")
+        self.thermal_connect_btn.clicked.connect(self.connect_to_thermal)
+        self.thermal_connect_btn.setStyleSheet("QPushButton { background-color: #ff9800; color: white; padding: 6px; }")
+        video_group_layout.addWidget(self.thermal_connect_btn)
+        
+        self.thermal_disconnect_btn = QPushButton("Disconnect Thermal")
+        self.thermal_disconnect_btn.clicked.connect(self.disconnect_from_thermal)
+        self.thermal_disconnect_btn.setEnabled(False)
+        self.thermal_disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 6px; }")
+        video_group_layout.addWidget(self.thermal_disconnect_btn)
+        
+        video_group.setLayout(video_group_layout)
         controls_layout.addWidget(video_group)
         
-        # Connection status (video)
+        # Connection status (video and thermal)
         self.connection_label = QLabel("Video: Disconnected")
         self.connection_label.setFont(QFont("Arial", 10, QFont.Bold))
         self.connection_label.setAlignment(Qt.AlignCenter)
         self.connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
         controls_layout.addWidget(self.connection_label)
+
+        self.thermal_connection_label = QLabel("Thermal: Disconnected")
+        self.thermal_connection_label.setFont(QFont("Arial", 10, QFont.Bold))
+        self.thermal_connection_label.setAlignment(Qt.AlignCenter)
+        self.thermal_connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
+        controls_layout.addWidget(self.thermal_connection_label)
 
         # STM32 Serial
         stm32_group = QGroupBox("STM32 Serial")
@@ -388,9 +436,10 @@ class RoverControlGUI(QMainWindow):
         self.stm32_status_label.setAlignment(Qt.AlignCenter)
         self.stm32_status_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
         controls_layout.addWidget(self.stm32_status_label)
-        
-        # Add controls to main layout (1/4 of the space)
-        main_layout.addLayout(controls_layout, 1)
+
+        # Add to main layout: video takes remaining space, controls stay fixed at 320px
+        main_layout.addWidget(video_container, 1)
+        main_layout.addWidget(controls_container, 0)
         
     def _up_pressed(self):
         return Qt.Key_Up in self.pressed_keys or Qt.Key_W in self.pressed_keys
@@ -556,22 +605,58 @@ class RoverControlGUI(QMainWindow):
             QLabel { 
                 background-color: #000; 
                 color: #fff; 
-                padding: 50px; 
+                padding: 8px; 
                 border: 2px solid #333; 
                 border-radius: 10px;
-                min-height: 400px;
             }
         """)
+
+    def connect_to_thermal(self):
+        """Connect to thermal stream from Pi (port 5001)."""
+        if self.thermal_receiver.connect_to_stream():
+            self.thermal_receiver.start()
+            self.thermal_connect_btn.setEnabled(False)
+            self.thermal_disconnect_btn.setEnabled(True)
+        else:
+            QMessageBox.warning(self, "Connection Failed",
+                "Failed to connect to thermal stream.\n\n"
+                "Make sure:\n"
+                "1. Pi is running thermal_sender.py\n"
+                "2. Both devices are on the same WiFi network\n"
+                "3. Thermal server is at 100.70.10.57:5001")
+
+    def disconnect_from_thermal(self):
+        """Disconnect from thermal stream."""
+        self.thermal_receiver.disconnect_from_stream()
+        self.thermal_receiver.quit()
+        self.thermal_receiver.wait()
+
+        self.thermal_connect_btn.setEnabled(True)
+        self.thermal_disconnect_btn.setEnabled(False)
+        self.thermal_label.setText("Thermal: Disconnected")
+        self.thermal_label.setStyleSheet("""
+            QLabel { 
+                background-color: #1a1a1a; 
+                color: #ff9800; 
+                padding: 8px; 
+                border: 2px solid #333; 
+                border-radius: 10px;
+            }
+        """)
+
+    def handle_thermal_error(self, error_message):
+        """Handle thermal stream errors."""
+        print(f"Thermal Error: {error_message}")
+        if "Failed to connect" in error_message:
+            QMessageBox.warning(self, "Thermal Connection Error", error_message)
     
     def update_video_frame(self, pixmap):
         """Update video label with new frame."""
-        # Scale pixmap to fit label while maintaining aspect ratio
-        scaled_pixmap = pixmap.scaled(
-            self.video_label.size(), 
-            Qt.KeepAspectRatio, 
-            Qt.SmoothTransformation
-        )
-        self.video_label.setPixmap(scaled_pixmap)
+        self.video_label.setPixmap(pixmap)
+
+    def update_thermal_frame(self, pixmap):
+        """Update thermal label with new frame."""
+        self.thermal_label.setPixmap(pixmap)
     
     def update_connection_status(self, connected):
         """Update connection status display."""
@@ -581,6 +666,15 @@ class RoverControlGUI(QMainWindow):
         else:
             self.connection_label.setText("Video: Disconnected")
             self.connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 10px; border-radius: 5px; }")
+
+    def update_thermal_connection_status(self, connected):
+        """Update thermal connection status display."""
+        if connected:
+            self.thermal_connection_label.setText("Thermal: Connected")
+            self.thermal_connection_label.setStyleSheet("QLabel { color: green; background-color: #e8f5e8; padding: 8px; border-radius: 5px; }")
+        else:
+            self.thermal_connection_label.setText("Thermal: Disconnected")
+            self.thermal_connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
     
     def handle_error(self, error_message):
         """Handle communication errors."""
@@ -594,6 +688,8 @@ class RoverControlGUI(QMainWindow):
         """Handle application close event."""
         if self.video_receiver.is_connected:
             self.disconnect_from_video()
+        if self.thermal_receiver.is_connected:
+            self.disconnect_from_thermal()
         if self.stm32_comm.is_connected:
             self.disconnect_from_stm32()
         event.accept()
@@ -605,7 +701,7 @@ def main():
     
     # Create and show the main window
     window = RoverControlGUI()
-    window.show()
+    window.showMaximized()  # Fill screen on any laptop
     
     # Start the application
     sys.exit(app.exec_())
