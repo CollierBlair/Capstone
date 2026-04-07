@@ -659,11 +659,13 @@ class RoverControlGUI(QMainWindow):
     
     def update_video_frame(self, pixmap):
         """Update video label with new frame."""
-        self.video_label.setPixmap(pixmap)
+        from PyQt5.QtGui import QTransform
+        self.video_label.setPixmap(pixmap.transformed(QTransform().scale(1, -1)))
 
     def update_thermal_frame(self, pixmap):
         """Update thermal label with new frame."""
-        self.thermal_label.setPixmap(pixmap)
+        from PyQt5.QtGui import QTransform
+        self.thermal_label.setPixmap(pixmap.transformed(QTransform().scale(1, -1)))
     
     def update_connection_status(self, connected):
         """Update connection status display."""
