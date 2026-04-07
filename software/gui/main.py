@@ -127,15 +127,15 @@ class VideoReceiver(QThread):
     def run(self):
         """Main thread loop for receiving and decoding video frames."""
         bytes_data = b''
-        
+
         while self.running and self.is_connected:
             try:
                 if not self.stream:
                     self.msleep(100)
                     continue
-                
-                # Read a chunk of the stream
-                chunk = self.stream.read(1024)
+
+                # Read large chunks so JPEG frames assemble in fewer iterations
+                chunk = self.stream.read(65536)
                 if not chunk:
                     # Stream ended, try to reconnect
                     self.error_occurred.emit("Video stream ended, attempting to reconnect...")
@@ -144,33 +144,34 @@ class VideoReceiver(QThread):
                         continue
                     else:
                         break
-                
+
                 bytes_data += chunk
-                
+
                 # Look for JPEG start and end markers
                 start_marker = bytes_data.find(b'\xff\xd8')
                 end_marker = bytes_data.find(b'\xff\xd9')
-                
+
                 if start_marker != -1 and end_marker != -1 and end_marker > start_marker:
                     # Extract JPEG frame
                     jpg = bytes_data[start_marker:end_marker + 2]
                     bytes_data = bytes_data[end_marker + 2:]
-                    
+
+                    # Drop stale frames: if another complete frame is already buffered,
+                    # skip this one to stay as close to real-time as possible
+                    next_start = bytes_data.find(b'\xff\xd8')
+                    next_end = bytes_data.find(b'\xff\xd9')
+                    if next_start != -1 and next_end != -1 and next_end > next_start:
+                        continue
+
                     # Decode JPEG directly into QImage
                     qimage = QImage()
                     if qimage.loadFromData(jpg):
-                        # Convert to QPixmap and emit signal
                         pixmap = QPixmap.fromImage(qimage)
-                        # Scale to fit video label (optional - can be done in GUI)
                         self.frame_ready.emit(pixmap)
-                
-                # Small delay to prevent excessive CPU usage
-                self.msleep(10)
-                
+
             except Exception as e:
                 self.error_occurred.emit(f"Video receive error: {str(e)}")
                 print(f"Video error: {e}")
-                # Try to reconnect after error
                 self.msleep(1000)
                 if self.running:
                     self.connect_to_stream()
