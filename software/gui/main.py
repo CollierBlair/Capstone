@@ -147,20 +147,17 @@ class VideoReceiver(QThread):
 
                 bytes_data += chunk
 
-                # Look for JPEG start and end markers
-                start_marker = bytes_data.find(b'\xff\xd8')
-                end_marker = bytes_data.find(b'\xff\xd9')
+                # Find the LAST complete JPEG in the buffer to skip any backlog
+                end_marker = bytes_data.rfind(b'\xff\xd9')
+                if end_marker != -1:
+                    start_marker = bytes_data.rfind(b'\xff\xd8', 0, end_marker)
+                    if start_marker != -1:
+                        jpg = bytes_data[start_marker:end_marker + 2]
+                        bytes_data = bytes_data[end_marker + 2:]
 
-                if start_marker != -1 and end_marker != -1 and end_marker > start_marker:
-                    # Extract JPEG frame
-                    jpg = bytes_data[start_marker:end_marker + 2]
-                    bytes_data = bytes_data[end_marker + 2:]
-
-                    # Decode JPEG directly into QImage
-                    qimage = QImage()
-                    if qimage.loadFromData(jpg):
-                        pixmap = QPixmap.fromImage(qimage)
-                        self.frame_ready.emit(pixmap)
+                        qimage = QImage()
+                        if qimage.loadFromData(jpg):
+                            self.frame_ready.emit(QPixmap.fromImage(qimage))
 
             except Exception as e:
                 self.error_occurred.emit(f"Video receive error: {str(e)}")
