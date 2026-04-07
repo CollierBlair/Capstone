@@ -12,7 +12,7 @@ app = Flask(__name__)
 # Initialize I2C and MLX90640
 i2c = busio.I2C(board.SCL, board.SDA, frequency=100000)
 mlx = adafruit_mlx90640.MLX90640(i2c)
-mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_2_HZ
+mlx.refresh_rate = adafruit_mlx90640.RefreshRate.REFRESH_4_HZ
 
 thermal_raw = np.zeros((24*32,))
 latest_thermal_img = np.zeros((240, 320, 3), dtype=np.uint8)
@@ -45,7 +45,6 @@ def generate_frames():
             print("Thermal read error:", e)
             time.sleep(0.1)
 
-        time.sleep(0.5)  # 2 FPS
 
 @app.route('/thermal')
 def thermal_feed():
