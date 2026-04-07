@@ -156,13 +156,6 @@ class VideoReceiver(QThread):
                     jpg = bytes_data[start_marker:end_marker + 2]
                     bytes_data = bytes_data[end_marker + 2:]
 
-                    # Drop stale frames: if another complete frame is already buffered,
-                    # skip this one to stay as close to real-time as possible
-                    next_start = bytes_data.find(b'\xff\xd8')
-                    next_end = bytes_data.find(b'\xff\xd9')
-                    if next_start != -1 and next_end != -1 and next_end > next_start:
-                        continue
-
                     # Decode JPEG directly into QImage
                     qimage = QImage()
                     if qimage.loadFromData(jpg):
