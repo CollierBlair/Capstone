@@ -178,7 +178,34 @@ class RoverControlGUI(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Thermal Rover Control v1.0")
+        self.setStyleSheet("""
+            QMainWindow { background-color: #1a1c18; }
+            QWidget { background-color: #1a1c18; color: #c8d4a0; }
+            QGroupBox {
+                color: #c8d4a0;
+                border: 1px solid #4a5240;
+                border-radius: 5px;
+                margin-top: 8px;
+                font-family: 'Courier New';
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px;
+            }
+            QComboBox {
+                background-color: #2e3228;
+                color: #c8d4a0;
+                border: 1px solid #4a5240;
+                padding: 2px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #2e3228;
+                color: #c8d4a0;
+            }
+            QFrame { background-color: #242820; }
+        """)
+        self.setWindowTitle("ROVER CONTROL v1.0")
         # Size window to fit available screen (works on any laptop)
         desktop = QDesktopWidget()
         available = desktop.availableGeometry()
@@ -245,24 +272,24 @@ class RoverControlGUI(QMainWindow):
         feeds_layout.setSpacing(5)
 
         # Regular video feed (port 5000) - left
-        self.video_label = QLabel("Connecting...")
-        self.video_label.setFont(QFont("Arial", 12))
+        self.video_label = QLabel("ACQUIRING FEED...")
+        self.video_label.setFont(QFont("Courier New", 12))
         self.video_label.setAlignment(Qt.AlignCenter)
         self.video_label.setStyleSheet("""
-            QLabel { background-color: #000; color: #fff; padding: 4px;
-                     border: 2px solid #333; border-radius: 8px; }
+            QLabel { background-color: #0d0f0b; color: #c8d4a0; padding: 4px;
+                     border: 2px solid #4a5240; border-radius: 8px; }
         """)
         self.video_label.setScaledContents(True)
         self.video_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         feeds_layout.addWidget(self.video_label, 1)
 
         # Thermal video feed (port 5001) - right
-        self.thermal_label = QLabel("Thermal: Off")
-        self.thermal_label.setFont(QFont("Arial", 12))
+        self.thermal_label = QLabel("THERMAL: OFFLINE")
+        self.thermal_label.setFont(QFont("Courier New", 12))
         self.thermal_label.setAlignment(Qt.AlignCenter)
         self.thermal_label.setStyleSheet("""
-            QLabel { background-color: #1a1a1a; color: #ff9800; padding: 4px;
-                     border: 2px solid #333; border-radius: 8px; }
+            QLabel { background-color: #0f0e08; color: #c8a040; padding: 4px;
+                     border: 2px solid #4a5240; border-radius: 8px; }
         """)
         self.thermal_label.setScaledContents(True)
         self.thermal_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -271,10 +298,10 @@ class RoverControlGUI(QMainWindow):
         video_layout.addLayout(feeds_layout, 1)
         
         # Status display for video area
-        self.status_label = QLabel("Status: Ready - Use Arrow Keys to Control")
-        self.status_label.setFont(QFont("Arial", 12))
+        self.status_label = QLabel("SYSTEM READY \u2014 AWAITING INPUT")
+        self.status_label.setFont(QFont("Courier New", 12))
         self.status_label.setAlignment(Qt.AlignCenter)
-        self.status_label.setStyleSheet("QLabel { background-color: #e0e0e0; padding: 10px; border-radius: 5px; }")
+        self.status_label.setStyleSheet("QLabel { background-color: #242820; color: #c8d4a0; padding: 10px; border-radius: 5px; }")
         video_layout.addWidget(self.status_label)
 
         # Right side - Controls panel (fixed width so always visible, even in fullscreen)
@@ -283,23 +310,23 @@ class RoverControlGUI(QMainWindow):
         controls_layout = QVBoxLayout(controls_container)
         
         # Title
-        title_label = QLabel("Thermal Rover Control")
-        title_label.setFont(QFont("Arial", 14, QFont.Bold))
+        title_label = QLabel("TACTICAL ROVER CTRL")
+        title_label.setFont(QFont("Courier New", 14, QFont.Bold))
         title_label.setAlignment(Qt.AlignCenter)
         controls_layout.addWidget(title_label)
         
         # Movement display area
-        self.movement_display = QLabel("Movement: None")
-        self.movement_display.setFont(QFont("Arial", 12, QFont.Bold))
+        self.movement_display = QLabel("MOVEMENT: NONE")
+        self.movement_display.setFont(QFont("Courier New", 12, QFont.Bold))
         self.movement_display.setAlignment(Qt.AlignCenter)
-        self.movement_display.setStyleSheet("QLabel { background-color: #f0f0f0; padding: 15px; border: 2px solid #ccc; border-radius: 8px; }")
+        self.movement_display.setStyleSheet("QLabel { background-color: #2e3228; color: #c8d4a0; padding: 15px; border: 2px solid #4a5240; border-radius: 8px; }")
         controls_layout.addWidget(self.movement_display)
         
         # Control instructions
-        instructions = QLabel("Controls: Arrow keys or W A S D. Q = accelerate, E = decelerate")
-        instructions.setFont(QFont("Arial", 9))
+        instructions = QLabel("CONTROLS: WASD / ARROWS  |  Q=ACCEL  E=DECEL")
+        instructions.setFont(QFont("Courier New", 9))
         instructions.setAlignment(Qt.AlignCenter)
-        instructions.setStyleSheet("QLabel { color: #666; margin: 5px; }")
+        instructions.setStyleSheet("QLabel { color: #7a8c60; margin: 5px; }")
         controls_layout.addWidget(instructions)
         
         # Control buttons (visual representation) - Keyboard layout
@@ -314,14 +341,16 @@ class RoverControlGUI(QMainWindow):
             QPushButton {
                 font-size: 20px;
                 font-weight: bold;
+                font-family: 'Courier New';
                 padding: 15px;
-                border: 2px solid #333;
+                border: 2px solid #4a5240;
                 border-radius: 8px;
-                background-color: #f0f0f0;
+                background-color: #2e3228;
+                color: #c8d4a0;
             }
             QPushButton:pressed {
-                background-color: #4CAF50;
-                color: white;
+                background-color: #4a6b30;
+                color: #c8d4a0;
             }
         """
         
@@ -352,60 +381,60 @@ class RoverControlGUI(QMainWindow):
         controls_layout.addLayout(button_layout)
         
         # Video Connection Settings
-        video_group = QGroupBox("Video Stream")
+        video_group = QGroupBox("VIDEO FEEDS")
         video_group_layout = QVBoxLayout()
         
         # Regular video (port 5000) - Connect/Disconnect
         self.connect_btn = QPushButton("Connect to Video")
         self.connect_btn.clicked.connect(self.connect_to_video)
-        self.connect_btn.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; padding: 6px; }")
+        self.connect_btn.setStyleSheet("QPushButton { background-color: #4a6b30; color: #c8d4a0; padding: 6px; font-family: 'Courier New'; }")
         video_group_layout.addWidget(self.connect_btn)
-        
+
         self.disconnect_btn = QPushButton("Disconnect Video")
         self.disconnect_btn.clicked.connect(self.disconnect_from_video)
         self.disconnect_btn.setEnabled(False)
-        self.disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 6px; }")
+        self.disconnect_btn.setStyleSheet("QPushButton { background-color: #6b3a28; color: #c8d4a0; padding: 6px; font-family: 'Courier New'; }")
         video_group_layout.addWidget(self.disconnect_btn)
-        
+
         # Thermal feed (port 5001) - Connect/Disconnect
         self.thermal_connect_btn = QPushButton("Connect to Thermal")
         self.thermal_connect_btn.clicked.connect(self.connect_to_thermal)
-        self.thermal_connect_btn.setStyleSheet("QPushButton { background-color: #ff9800; color: white; padding: 6px; }")
+        self.thermal_connect_btn.setStyleSheet("QPushButton { background-color: #7a6030; color: #c8d4a0; padding: 6px; font-family: 'Courier New'; }")
         video_group_layout.addWidget(self.thermal_connect_btn)
-        
+
         self.thermal_disconnect_btn = QPushButton("Disconnect Thermal")
         self.thermal_disconnect_btn.clicked.connect(self.disconnect_from_thermal)
         self.thermal_disconnect_btn.setEnabled(False)
-        self.thermal_disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 6px; }")
+        self.thermal_disconnect_btn.setStyleSheet("QPushButton { background-color: #6b3a28; color: #c8d4a0; padding: 6px; font-family: 'Courier New'; }")
         video_group_layout.addWidget(self.thermal_disconnect_btn)
         
         video_group.setLayout(video_group_layout)
         controls_layout.addWidget(video_group)
         
         # Connection status (video and thermal)
-        self.connection_label = QLabel("Video: Disconnected")
-        self.connection_label.setFont(QFont("Arial", 10, QFont.Bold))
+        self.connection_label = QLabel("VIDEO: OFFLINE")
+        self.connection_label.setFont(QFont("Courier New", 10, QFont.Bold))
         self.connection_label.setAlignment(Qt.AlignCenter)
-        self.connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
+        self.connection_label.setStyleSheet("QLabel { color: #b06020; background-color: #2a2010; padding: 8px; border-radius: 5px; }")
         controls_layout.addWidget(self.connection_label)
 
-        self.thermal_connection_label = QLabel("Thermal: Disconnected")
-        self.thermal_connection_label.setFont(QFont("Arial", 10, QFont.Bold))
+        self.thermal_connection_label = QLabel("THERMAL: OFFLINE")
+        self.thermal_connection_label.setFont(QFont("Courier New", 10, QFont.Bold))
         self.thermal_connection_label.setAlignment(Qt.AlignCenter)
-        self.thermal_connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
+        self.thermal_connection_label.setStyleSheet("QLabel { color: #b06020; background-color: #2a2010; padding: 8px; border-radius: 5px; }")
         controls_layout.addWidget(self.thermal_connection_label)
 
         # STM32 Serial
-        stm32_group = QGroupBox("STM32 Serial")
+        stm32_group = QGroupBox("CTRL LINK")
         stm32_layout = QVBoxLayout()
         port_row = QHBoxLayout()
-        port_row.addWidget(QLabel("Port:"))
+        port_row.addWidget(QLabel("PORT:"))
         self.port_combo = QComboBox()
         self.port_combo.setMinimumWidth(140)
         port_row.addWidget(self.port_combo)
         stm32_layout.addLayout(port_row)
         baud_row = QHBoxLayout()
-        baud_row.addWidget(QLabel("Baud:"))
+        baud_row.addWidget(QLabel("BAUD:"))
         self.baud_combo = QComboBox()
         self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200"])
         self.baud_combo.setCurrentText("115200")  # match test_ser.py and sender
@@ -413,19 +442,19 @@ class RoverControlGUI(QMainWindow):
         stm32_layout.addLayout(baud_row)
         self.stm32_connect_btn = QPushButton("Connect STM32")
         self.stm32_connect_btn.clicked.connect(self.connect_to_stm32)
-        self.stm32_connect_btn.setStyleSheet("QPushButton { background-color: #2196F3; color: white; padding: 6px; }")
+        self.stm32_connect_btn.setStyleSheet("QPushButton { background-color: #2a4a5c; color: #c8d4a0; padding: 6px; font-family: 'Courier New'; }")
         stm32_layout.addWidget(self.stm32_connect_btn)
         self.stm32_disconnect_btn = QPushButton("Disconnect STM32")
         self.stm32_disconnect_btn.clicked.connect(self.disconnect_from_stm32)
         self.stm32_disconnect_btn.setEnabled(False)
-        self.stm32_disconnect_btn.setStyleSheet("QPushButton { background-color: #f44336; color: white; padding: 6px; }")
+        self.stm32_disconnect_btn.setStyleSheet("QPushButton { background-color: #6b3a28; color: #c8d4a0; padding: 6px; font-family: 'Courier New'; }")
         stm32_layout.addWidget(self.stm32_disconnect_btn)
         stm32_group.setLayout(stm32_layout)
         controls_layout.addWidget(stm32_group)
-        self.stm32_status_label = QLabel("STM32: Disconnected")
-        self.stm32_status_label.setFont(QFont("Arial", 10, QFont.Bold))
+        self.stm32_status_label = QLabel("CTRL LINK: OFFLINE")
+        self.stm32_status_label.setFont(QFont("Courier New", 10, QFont.Bold))
         self.stm32_status_label.setAlignment(Qt.AlignCenter)
-        self.stm32_status_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
+        self.stm32_status_label.setStyleSheet("QLabel { color: #b06020; background-color: #2a2010; padding: 8px; border-radius: 5px; }")
         controls_layout.addWidget(self.stm32_status_label)
 
         # Add to main layout: video takes remaining space, controls stay fixed at 320px
@@ -504,15 +533,15 @@ class RoverControlGUI(QMainWindow):
     
     def handle_movement(self, direction):
         """Handle movement commands."""
-        self.movement_display.setText(f"Movement: {direction}")
-        
+        self.movement_display.setText(f"MOVEMENT: {direction.upper()}")
+
         # Update status
         if direction == "Stop":
-            self.status_label.setText("Status: Stopped")
-            self.status_label.setStyleSheet("QLabel { background-color: #e0e0e0; padding: 10px; border-radius: 5px; }")
+            self.status_label.setText("HALT")
+            self.status_label.setStyleSheet("QLabel { background-color: #242820; color: #c8d4a0; padding: 10px; border-radius: 5px; }")
         else:
-            self.status_label.setText(f"Status: Moving {direction}")
-            self.status_label.setStyleSheet("QLabel { background-color: #4CAF50; color: white; padding: 10px; border-radius: 5px; }")
+            self.status_label.setText(f">> MOVING: {direction.upper()}")
+            self.status_label.setStyleSheet("QLabel { background-color: #3d5c26; color: #c8d4a0; padding: 10px; border-radius: 5px; }")
         
         print(f"Rover Command: {direction}")
 
@@ -567,11 +596,11 @@ class RoverControlGUI(QMainWindow):
     def update_stm32_status(self, connected):
         """Update STM32 connection status label."""
         if connected:
-            self.stm32_status_label.setText("STM32: Connected")
-            self.stm32_status_label.setStyleSheet("QLabel { color: green; background-color: #e8f5e8; padding: 8px; border-radius: 5px; }")
+            self.stm32_status_label.setText("CTRL LINK: ONLINE")
+            self.stm32_status_label.setStyleSheet("QLabel { color: #5aab40; background-color: #1e2e1a; padding: 8px; border-radius: 5px; }")
         else:
-            self.stm32_status_label.setText("STM32: Disconnected")
-            self.stm32_status_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
+            self.stm32_status_label.setText("CTRL LINK: OFFLINE")
+            self.stm32_status_label.setStyleSheet("QLabel { color: #b06020; background-color: #2a2010; padding: 8px; border-radius: 5px; }")
 
     def handle_stm32_error(self, msg):
         QMessageBox.warning(self, "Can't connect to STM32", msg)
@@ -598,13 +627,13 @@ class RoverControlGUI(QMainWindow):
         
         self.connect_btn.setEnabled(True)
         self.disconnect_btn.setEnabled(False)
-        self.video_label.setText("Video Feed\n(Disconnected)")
+        self.video_label.setText("VIDEO FEED\nOFFLINE")
         self.video_label.setStyleSheet("""
-            QLabel { 
-                background-color: #000; 
-                color: #fff; 
-                padding: 8px; 
-                border: 2px solid #333; 
+            QLabel {
+                background-color: #0d0f0b;
+                color: #c8d4a0;
+                padding: 8px;
+                border: 2px solid #4a5240;
                 border-radius: 10px;
             }
         """)
@@ -631,13 +660,13 @@ class RoverControlGUI(QMainWindow):
 
         self.thermal_connect_btn.setEnabled(True)
         self.thermal_disconnect_btn.setEnabled(False)
-        self.thermal_label.setText("Thermal: Disconnected")
+        self.thermal_label.setText("THERMAL FEED\nOFFLINE")
         self.thermal_label.setStyleSheet("""
-            QLabel { 
-                background-color: #1a1a1a; 
-                color: #ff9800; 
-                padding: 8px; 
-                border: 2px solid #333; 
+            QLabel {
+                background-color: #0f0e08;
+                color: #c8a040;
+                padding: 8px;
+                border: 2px solid #4a5240;
                 border-radius: 10px;
             }
         """)
@@ -661,20 +690,20 @@ class RoverControlGUI(QMainWindow):
     def update_connection_status(self, connected):
         """Update connection status display."""
         if connected:
-            self.connection_label.setText("Video: Connected")
-            self.connection_label.setStyleSheet("QLabel { color: green; background-color: #e8f5e8; padding: 10px; border-radius: 5px; }")
+            self.connection_label.setText("VIDEO: ONLINE")
+            self.connection_label.setStyleSheet("QLabel { color: #5aab40; background-color: #1e2e1a; padding: 10px; border-radius: 5px; }")
         else:
-            self.connection_label.setText("Video: Disconnected")
-            self.connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 10px; border-radius: 5px; }")
+            self.connection_label.setText("VIDEO: OFFLINE")
+            self.connection_label.setStyleSheet("QLabel { color: #b06020; background-color: #2a2010; padding: 10px; border-radius: 5px; }")
 
     def update_thermal_connection_status(self, connected):
         """Update thermal connection status display."""
         if connected:
-            self.thermal_connection_label.setText("Thermal: Connected")
-            self.thermal_connection_label.setStyleSheet("QLabel { color: green; background-color: #e8f5e8; padding: 8px; border-radius: 5px; }")
+            self.thermal_connection_label.setText("THERMAL: ONLINE")
+            self.thermal_connection_label.setStyleSheet("QLabel { color: #5aab40; background-color: #1e2e1a; padding: 8px; border-radius: 5px; }")
         else:
-            self.thermal_connection_label.setText("Thermal: Disconnected")
-            self.thermal_connection_label.setStyleSheet("QLabel { color: red; background-color: #ffebee; padding: 8px; border-radius: 5px; }")
+            self.thermal_connection_label.setText("THERMAL: OFFLINE")
+            self.thermal_connection_label.setStyleSheet("QLabel { color: #b06020; background-color: #2a2010; padding: 8px; border-radius: 5px; }")
     
     def handle_error(self, error_message):
         """Handle communication errors."""
