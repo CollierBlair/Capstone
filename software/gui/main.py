@@ -680,7 +680,7 @@ class RoverControlGUI(QMainWindow):
     def update_video_frame(self, pixmap):
         """Update video label with new frame."""
         from PyQt5.QtGui import QTransform
-        self.video_label.setPixmap(pixmap.transformed(QTransform().scale(1, -1)))
+        self.video_label.setPixmap(pixmap.transformed(QTransform().scale(-1, -1)))
 
     def update_thermal_frame(self, pixmap):
         """Update thermal label with new frame."""
