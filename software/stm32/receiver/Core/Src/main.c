@@ -75,10 +75,6 @@ void rfm_wait_packet_received();
 // TIM2CH2 	PA2 (A7)
 // TIM2CH4 	PA3 (A2)
 
-// 50kHz frequency output
-void motor_left_set_duty(uint8_t dir, uint8_t duty);
-void motor_right_set_duty(uint8_t dir, uint8_t duty);
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
